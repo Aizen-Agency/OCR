@@ -65,7 +65,8 @@ sudo ufw allow 5000/tcp
 sudo ufw --force enable
 
 echo "🚀 Starting OCR server..."
-docker-compose up -d --build
+# docker-compose up -d --build
+docker-compose --profile production up -d --build
 
 echo ""
 echo "✅ Deployment completed!"
