@@ -54,8 +54,7 @@ class OCRService:
             if self.ocr is None:
                 logger.info(f"Initializing PaddleOCR with language: {lang}, PP-OCRv5: {use_pp_ocr_v5_server}")
 
-                # Configure for PP-OCRv5_server_det if requested
-                # Use minimal parameters to avoid version compatibility issues
+                # Configure based on use case: development (fast) vs production (accurate)
                 ocr_config = {
                     'lang': lang,
                 }
@@ -66,13 +65,17 @@ class OCRService:
                     logger.info("GPU mode requested - ensure CUDA_VISIBLE_DEVICES is set if GPU is available")
 
                 if use_pp_ocr_v5_server:
-                    # Use PP-OCRv5 server models optimized for production
-                    logger.info("Using PP-OCRv5_server_det model for enhanced performance")
+                    # PRODUCTION MODE: Use PP-OCRv5 server models (best accuracy, slower startup)
+                    # PaddleOCR 3.x uses v5 server models by default when no version specified
+                    logger.info("PRODUCTION MODE: Using PP-OCRv5 server models (high accuracy, 3-5 min startup)")
+                    # No additional config needed - defaults to v5 server models
+                else:
+                    # DEVELOPMENT MODE: Use lightweight models (faster startup, good accuracy)
+                    logger.info("DEVELOPMENT MODE: Using lightweight models (30-60 sec startup)")
                     ocr_config.update({
-                        'det_model_dir': None,  # Let PaddleOCR auto-download latest
-                        'rec_model_dir': None,  # Let PaddleOCR auto-download latest
-                        'cls_model_dir': None,  # Let PaddleOCR auto-download latest
-                        # PP-OCRv5 server models are downloaded automatically by PaddleOCR >= 2.7
+                        'use_angle_cls': False,  # Disable angle classification for faster processing
+                        'det_limit_side_len': 960,  # Smaller detection size for speed
+                        'rec_batch_num': 6,  # Smaller batch for lower memory usage
                     })
 
                 # Merge with any additional kwargs
@@ -116,7 +119,7 @@ class OCRService:
             image = self.image_processor.process_image_bytes(image_data)
 
             # Perform OCR
-            result = self.ocr.ocr(np.array(image), cls=True)
+            result = self.ocr.ocr(np.array(image))
 
             # Extract text and confidence
             lines, full_text = self.text_extractor.extract_from_ocr_result(result)
@@ -166,7 +169,7 @@ class OCRService:
                     logger.debug(f"Processing page {page_num}/{len(page_images)}")
 
                     # Perform OCR on page
-                    result = self.ocr.ocr(np.array(image), cls=True)
+                    result = self.ocr.ocr(np.array(image))
 
                     # Extract text and confidence
                     lines, page_text = self.text_extractor.extract_from_ocr_result(result)

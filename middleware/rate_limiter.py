@@ -3,7 +3,7 @@ Rate Limiter Middleware - Redis-based rate limiting
 """
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 from flask import request, jsonify, current_app
 from services.redis_service import RedisService
 

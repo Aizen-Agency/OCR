@@ -15,6 +15,8 @@ from services.ocr_service.ocr_service import OCRService
 from services.redis_service import RedisService
 from services.job_service import JobService
 
+logger = logging.getLogger(__name__)
+
 
 def create_app(config_name: str = None) -> Flask:
     """

@@ -12,6 +12,18 @@ from werkzeug.datastructures import FileStorage
 from services.ocr_service.ocr_service import OCRService
 from services.job_service import JobService
 from services.redis_service import RedisService
+from utils.constants import (
+    ERROR_NO_FILE,
+    ERROR_FILE_TOO_LARGE,
+    ERROR_INVALID_DPI,
+    ERROR_FILE_VALIDATION_FAILED,
+    ERROR_INTERNAL_SERVER,
+    JOB_CREATED_MESSAGE,
+    DEFAULT_DPI,
+    MIN_DPI,
+    MAX_DPI
+)
+from utils.validators import validate_dpi
 
 logger = logging.getLogger(__name__)
 

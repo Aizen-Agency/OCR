@@ -4,17 +4,36 @@ Celery Tasks for OCR Processing
 
 import logging
 from typing import Dict, Any
-from celery import Task
+from celery import Task, signals
 from celery_app import celery_app
 from services.ocr_service.ocr_service import OCRService
 from services.redis_service import RedisService
 from utils.encoding import decode_base64
+from config import get_config
 
 logger = logging.getLogger(__name__)
 
 # Initialize services (will be reused across tasks)
 ocr_service = None
 redis_service = None
+
+
+@signals.worker_ready.connect
+def preload_ocr_service(sender, **kwargs):
+    """Pre-initialize OCR service when worker starts to avoid delay on first task."""
+    global ocr_service
+    logger.info("Worker ready - pre-initializing OCR service...")
+    try:
+        ocr_service = OCRService()
+        config = get_config()
+        ocr_service.initialize_ocr(
+            lang=config.OCR_LANG,
+            use_gpu=config.USE_GPU,
+            use_pp_ocr_v5_server=config.USE_PP_OCR_V5_SERVER
+        )
+        logger.info("OCR service pre-initialized successfully - ready to process tasks!")
+    except Exception as e:
+        logger.warning(f"Failed to pre-initialize OCR service: {str(e)}. Will initialize on first task.")
 
 
 def _process_ocr_with_cache(
@@ -115,14 +134,33 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
         Dict containing OCR results
     """
     try:
+        import time
+        start_time = time.time()
         logger.info(f"Processing image task: {filename} (Task ID: {self.request.id})")
 
         # Decode base64 image data
+        decode_start = time.time()
         image_data = decode_base64(image_data_b64)
+        logger.info(f"Decoded image in {time.time() - decode_start:.2f}s")
 
         # Get services
+        service_start = time.time()
         ocr_svc = get_ocr_service()
         redis_svc = get_redis_service()
+        service_time = time.time() - service_start
+        logger.info(f"Got services in {service_time:.2f}s (OCR initialized: {ocr_svc.ocr is not None})")
+        
+        # If OCR not initialized, it will initialize now (slow)
+        if ocr_svc.ocr is None:
+            logger.warning("OCR not pre-initialized - initializing now (this will take 1-2 minutes)...")
+            init_start = time.time()
+            config = get_config()
+            ocr_svc.initialize_ocr(
+                lang=config.OCR_LANG,
+                use_gpu=config.USE_GPU,
+                use_pp_ocr_v5_server=config.USE_PP_OCR_V5_SERVER
+            )
+            logger.info(f"OCR initialized in {time.time() - init_start:.2f}s")
 
         # Generate cache key
         file_hash = redis_svc.generate_file_hash(image_data)
@@ -137,6 +175,9 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
         result['job_id'] = self.request.id
         result['filename'] = filename
         result['file_size'] = len(image_data)
+        
+        total_time = time.time() - start_time
+        logger.info(f"Completed image task {filename} in {total_time:.2f}s total")
 
         return result
 

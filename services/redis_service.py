@@ -8,6 +8,13 @@ import json
 from typing import Dict, Any, Optional, Tuple
 import redis
 from config import get_config
+from utils.constants import (
+    REDIS_KEY_PREFIX_OCR_RESULT,
+    REDIS_KEY_PREFIX_RATE_LIMIT,
+    CACHE_KEY_SEPARATOR,
+    CACHE_DPI_SUFFIX,
+    RATE_LIMIT_WINDOW_SECONDS
+)
 
 logger = logging.getLogger(__name__)
 
