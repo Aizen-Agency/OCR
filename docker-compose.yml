@@ -64,7 +64,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-      - /home/ocruser
 
   celery-worker:
     build:
@@ -101,7 +100,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-      - /home/ocruser
 
   # Optional: Add nginx reverse proxy for production
   nginx:
