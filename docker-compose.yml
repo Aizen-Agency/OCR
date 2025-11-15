@@ -93,7 +93,7 @@ services:
       - REC_BATCH_NUM=8
       - REDIS_URL=redis://redis:6379/0
       # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL if not set
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=DEBUG
       # Configure PaddlePaddle cache directories explicitly
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
