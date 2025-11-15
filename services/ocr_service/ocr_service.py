@@ -112,20 +112,28 @@ class OCRService:
             result = self.ocr.ocr(np.array(image))
             logger.info(f"OCR processing completed for {filename}")
 
-            # Debug: Log raw result extensively
+            # Debug: Log raw result extensively (safely handle different structures)
             logger.debug(f"Raw PaddleOCR result type: {type(result)}")
             logger.debug(f"Raw PaddleOCR result length: {len(result) if result else 0}")
             if result:
-                logger.debug(f"Result[0] type: {type(result[0])}")
-                logger.debug(f"Result[0] length: {len(result[0]) if result[0] else 0}")
-                if result[0] and len(result[0]) > 0:
-                    logger.debug(f"First OCR detection: {result[0][0]}")
-                    logger.debug(f"First OCR detection type: {type(result[0][0])}")
-                    logger.debug(f"First OCR detection length: {len(result[0][0])}")
-                    if len(result[0]) > 1:
-                        logger.debug(f"Second OCR detection: {result[0][1]}")
-                    if len(result[0]) > 2:
-                        logger.debug(f"Third OCR detection: {result[0][2]}")
+                try:
+                    logger.debug(f"Result[0] type: {type(result[0])}")
+                    if isinstance(result[0], (list, tuple)):
+                        logger.debug(f"Result[0] length: {len(result[0])}")
+                        if len(result[0]) > 0:
+                            logger.debug(f"First OCR detection: {result[0][0]}")
+                            logger.debug(f"First OCR detection type: {type(result[0][0])}")
+                            if isinstance(result[0][0], (list, tuple)):
+                                logger.debug(f"First OCR detection length: {len(result[0][0])}")
+                            if len(result[0]) > 1:
+                                logger.debug(f"Second OCR detection: {result[0][1]}")
+                            if len(result[0]) > 2:
+                                logger.debug(f"Third OCR detection: {result[0][2]}")
+                    else:
+                        logger.debug(f"Result[0] is not a list/tuple: {result[0]}")
+                except (IndexError, KeyError, TypeError) as e:
+                    logger.debug(f"Could not access result[0] details: {str(e)}")
+                    logger.debug(f"Full result structure: {result}")
 
             # Extract text and confidence
             logger.info(f"Extracting text from OCR result for {filename}")
