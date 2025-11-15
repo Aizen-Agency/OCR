@@ -139,9 +139,15 @@ def _register_services(app: Flask) -> None:
         ocr_service = OCRService()
         ocr_config = get_config()
         
-        # PaddleOCR 3.x uses simplified API - only lang parameter needed
-        # PP-OCRv5_server models are used by default (best accuracy)
-        ocr_service.initialize_ocr(lang=ocr_config.OCR_LANG)
+        # Initialize OCR with config parameters
+        ocr_service.initialize_ocr(
+            lang=ocr_config.OCR_LANG,
+            use_gpu=ocr_config.USE_GPU,
+            use_pp_ocr_v5_server=ocr_config.USE_PP_OCR_V5_SERVER,
+            use_angle_cls=ocr_config.USE_ANGLE_CLS,
+            det_limit_side_len=ocr_config.DET_LIMIT_SIDE_LEN,
+            rec_batch_num=ocr_config.REC_BATCH_NUM
+        )
 
         # Store service instances in app context for access by controllers
         app.ocr_service = ocr_service

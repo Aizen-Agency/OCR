@@ -105,7 +105,7 @@ class OCRService:
                 }
 
                 # Add angle classification if enabled
-                if self.config.USE_ANGLE_CLS:
+                if use_angle_cls:
                     paddle_config['use_angle_cls'] = True
 
                 self.ocr = PaddleOCR(**paddle_config)
