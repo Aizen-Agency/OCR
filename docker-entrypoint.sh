@@ -43,7 +43,12 @@ if [ "$(id -u)" = "0" ]; then
     # Use 'su' without '-' to avoid login shell that tries to write to home directory
     # Set TMPDIR and XDG_CACHE_HOME to /tmp which is writable (tmpfs mount)
     # XDG_CACHE_HOME redirects PaddleOCR's cache from /home/ocruser/.cache to /tmp/.cache
-    exec su ocruser -c "cd /app && export HOME=/home/ocruser TMPDIR=/tmp XDG_CACHE_HOME=/tmp/.cache && exec \"$@\""
+    # Build command string with proper quoting
+    cmd_string="cd /app && export HOME=/home/ocruser TMPDIR=/tmp XDG_CACHE_HOME=/tmp/.cache && exec"
+    for arg in "$@"; do
+        cmd_string="$cmd_string '$arg'"
+    done
+    exec su ocruser -c "$cmd_string"
 else
     exec "$@"
 fi
