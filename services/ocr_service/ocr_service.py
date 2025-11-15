@@ -108,16 +108,29 @@ class OCRService:
             image = self.image_processor.process_image_bytes(image_data)
 
             # Perform OCR
+            logger.info(f"Starting OCR processing for {filename}")
             result = self.ocr.ocr(np.array(image))
+            logger.info(f"OCR processing completed for {filename}")
 
-            # Debug: Log raw result
+            # Debug: Log raw result extensively
             logger.debug(f"Raw PaddleOCR result type: {type(result)}")
             logger.debug(f"Raw PaddleOCR result length: {len(result) if result else 0}")
-            if result and len(result) > 0 and len(result[0]) > 0:
-                logger.debug(f"First 3 OCR detections: {result[0][:3]}")
+            if result:
+                logger.debug(f"Result[0] type: {type(result[0])}")
+                logger.debug(f"Result[0] length: {len(result[0]) if result[0] else 0}")
+                if result[0] and len(result[0]) > 0:
+                    logger.debug(f"First OCR detection: {result[0][0]}")
+                    logger.debug(f"First OCR detection type: {type(result[0][0])}")
+                    logger.debug(f"First OCR detection length: {len(result[0][0])}")
+                    if len(result[0]) > 1:
+                        logger.debug(f"Second OCR detection: {result[0][1]}")
+                    if len(result[0]) > 2:
+                        logger.debug(f"Third OCR detection: {result[0][2]}")
 
             # Extract text and confidence
+            logger.info(f"Extracting text from OCR result for {filename}")
             lines, full_text = self.text_extractor.extract_from_ocr_result(result)
+            logger.info(f"Text extraction completed for {filename}. Lines: {len(lines)}, Text length: {len(full_text)}")
 
             return {
                 "text": full_text,
