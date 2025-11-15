@@ -116,11 +116,44 @@ class OCRService:
             # Perform OCR
             logger.info(f"Starting OCR processing for {filename}")
             logger.info(f"Image type: {type(image)}, size: {getattr(image, 'size', 'unknown')}, mode: {getattr(image, 'mode', 'unknown')}")
+
+            # Validate image
+            if image is None or (hasattr(image, 'size') and image.size[0] == 0):
+                logger.error(f"Invalid image: None or zero size")
+                raise ValueError("Invalid image provided")
+
             logger.info(f"Converting image to numpy array...")
             image_array = np.array(image)
             logger.info(f"Image array shape: {image_array.shape}, dtype: {image_array.dtype}, min: {image_array.min()}, max: {image_array.max()}")
+
+            # Validate numpy array
+            if image_array.size == 0 or len(image_array.shape) < 2:
+                logger.error(f"Invalid numpy array: shape {image_array.shape}, size {image_array.size}")
+                raise ValueError("Invalid image array")
+
             logger.info(f"Calling PaddleOCR.ocr()...")
-            result = self.ocr.ocr(image_array)
+            try:
+                import signal
+
+                def timeout_handler(signum, frame):
+                    raise TimeoutError("OCR processing timed out after 30 seconds")
+
+                # Set timeout for OCR call
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(30)  # 30 second timeout
+
+                result = self.ocr.ocr(image_array)
+
+                # Cancel timeout
+                signal.alarm(0)
+
+            except TimeoutError as timeout_error:
+                logger.error(f"OCR call timed out: {str(timeout_error)}")
+                raise RuntimeError("OCR processing timed out - possible infinite loop in PaddleOCR")
+            except Exception as ocr_error:
+                logger.error(f"OCR call failed: {str(ocr_error)}")
+                logger.error(f"OCR call exception type: {type(ocr_error).__name__}")
+                raise
             logger.warning(f"OCR result type: {type(result)}, length: {len(result) if result else 0}")
             logger.warning(f"OCR result: {result}")  # Force logging at WARNING level
             logger.info(f"OCR processing completed for {filename}")
