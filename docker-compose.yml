@@ -43,7 +43,7 @@ services:
       - REC_BATCH_NUM=8
       - MAX_CONTENT_LENGTH=52428800
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
-      - LOG_LEVEL=DEBUG
+      - LOG_LEVEL=INFO
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
@@ -92,7 +92,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - LOG_LEVEL=DEBUG
+      - LOG_LEVEL=INFO
     command: celery -A celery_app worker --loglevel=info --concurrency=4
     volumes:
       - ocr_uploads:/tmp/ocr_uploads
