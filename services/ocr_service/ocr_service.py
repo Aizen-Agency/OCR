@@ -124,8 +124,8 @@ class OCRService:
             logger.info(f"Converting image to numpy array...")
             image_array = np.array(image)
             logger.info(f"Image array shape: {image_array.shape}, dtype: {image_array.dtype}")
-            logger.info(f"Calling PaddleOCR.ocr()...")
-            result = self.ocr.ocr(image_array)
+            logger.info(f"Calling PaddleOCR.predict()...")
+            result = self.ocr.predict(image_array)
             logger.info(f"OCR processing completed for {filename}")
 
             # Debug: Log raw result extensively (safely handle different structures)
