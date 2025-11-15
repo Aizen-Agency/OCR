@@ -40,7 +40,11 @@ class OCRService:
             self._initialized = True
 
     def initialize_ocr(self, lang: str = 'en', use_gpu: bool = False,
-                      use_pp_ocr_v5_server: bool = True, **kwargs) -> None:
+                      use_pp_ocr_v5_server: bool = True, 
+                      use_angle_cls: bool = True,
+                      det_limit_side_len: int = 1280,
+                      rec_batch_num: int = 8,
+                      **kwargs) -> None:
         """
         Initialize the PaddleOCR model with PP-OCRv5_server_det for production use.
 
@@ -48,6 +52,9 @@ class OCRService:
             lang: Language for OCR (default: 'en')
             use_gpu: Whether to use GPU for inference
             use_pp_ocr_v5_server: Whether to use PP-OCRv5 server model (default: True)
+            use_angle_cls: Enable angle classification for rotated text (default: True)
+            det_limit_side_len: Max side length for detection (default: 1280)
+            rec_batch_num: Batch size for recognition (default: 8, optimized for 24GB VPS)
             **kwargs: Additional PaddleOCR initialization parameters
         """
         try:
@@ -68,7 +75,37 @@ class OCRService:
                     # PRODUCTION MODE: Use PP-OCRv5 server models (best accuracy, slower startup)
                     # PaddleOCR 3.x uses v5 server models by default when no version specified
                     logger.info("PRODUCTION MODE: Using PP-OCRv5 server models (high accuracy, 3-5 min startup)")
-                    # No additional config needed - defaults to v5 server models
+                    logger.info(f"  - Angle classification: {use_angle_cls}")
+                    logger.info(f"  - Detection limit: {det_limit_side_len}px")
+                    logger.info(f"  - Recognition batch: {rec_batch_num}")
+                    
+                    ocr_config.update({
+                        'use_angle_cls': use_angle_cls,  # Enable angle classification for rotated text
+                        'det_limit_side_len': det_limit_side_len,  # Higher detection limit for better accuracy
+                        'rec_batch_num': rec_batch_num,  # Batch processing for better throughput (24GB VPS optimized)
+                        'det_db_thresh': 0.3,  # Detection threshold (default: 0.3)
+                        'det_db_box_thresh': 0.6,  # Box threshold (default: 0.6)
+                        'rec_algorithm': 'SVTR_LCNet',  # PP-OCRv5 uses SVTR_LCNet by default
+                        'use_space_char': True,  # Preserve spaces in recognized text
+                        'drop_score': 0.5,  # Drop results below this confidence (default: 0.5)
+                        'show_log': False,  # Reduce console noise
+                    })
+                    
+                    # GPU-specific optimizations
+                    if use_gpu:
+                        ocr_config.update({
+                            'use_gpu': True,
+                            'gpu_mem': 2000,  # Allocate 2GB GPU memory per process
+                            'enable_mkldnn': False,  # Disable MKLDNN when using GPU
+                        })
+                        logger.info("  - GPU acceleration ENABLED with 2GB memory allocation")
+                    else:
+                        ocr_config.update({
+                            'use_gpu': False,
+                            'enable_mkldnn': True,  # Enable Intel MKL-DNN for CPU optimization
+                            'cpu_threads': 4,  # Use 4 CPU threads (optimal for 24GB VPS)
+                        })
+                        logger.info("  - CPU mode with MKL-DNN optimization (4 threads)")
                 else:
                     # DEVELOPMENT MODE: Use lightweight models (faster startup, good accuracy)
                     logger.info("DEVELOPMENT MODE: Using lightweight models (30-60 sec startup)")

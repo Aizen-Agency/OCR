@@ -32,6 +32,14 @@ class Config:
 
     # Use PP-OCRv5 server model by default
     USE_PP_OCR_V5_SERVER = os.getenv('USE_PP_OCR_V5_SERVER', 'true').lower() == 'true'
+    
+    # PaddleOCR v5 performance settings (optimized for 24GB VPS)
+    USE_ANGLE_CLS = os.getenv('USE_ANGLE_CLS', 'true').lower() == 'true'  # Enable angle classification
+    DET_LIMIT_SIDE_LEN = int(os.getenv('DET_LIMIT_SIDE_LEN', 1280))  # Detection limit (higher = more accurate)
+    REC_BATCH_NUM = int(os.getenv('REC_BATCH_NUM', 8))  # Batch size (higher = faster with more RAM)
+    DET_DB_THRESH = float(os.getenv('DET_DB_THRESH', 0.3))  # Detection threshold
+    DET_DB_BOX_THRESH = float(os.getenv('DET_DB_BOX_THRESH', 0.6))  # Box threshold
+    DROP_SCORE = float(os.getenv('DROP_SCORE', 0.5))  # Minimum confidence score
 
     # PDF processing settings
     DEFAULT_DPI = int(os.getenv('DEFAULT_DPI', 300))
