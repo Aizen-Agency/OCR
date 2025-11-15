@@ -55,26 +55,15 @@ class OCRService:
             self.text_extractor = TextExtractor()
             self._initialized = True
 
-    def initialize_ocr(self, lang: str = 'en', use_gpu: bool = False,
-                      use_pp_ocr_v5_server: bool = True, 
-                      use_angle_cls: bool = True,
-                      det_limit_side_len: int = 1280,
-                      rec_batch_num: int = 8,
-                      **kwargs) -> None:
+    def initialize_ocr(self, lang: str = 'en') -> None:
         """
         Initialize the PaddleOCR 3.x model with PP-OCRv5 (default in PaddleOCR 3.0).
-        
-        According to official docs: https://www.paddleocr.ai/latest/en/version3.x/pipeline_usage/OCR.html
-        PaddleOCR 3.x uses PP-OCRv5_server models by default with simplified API.
+
+        Following official PaddleOCR 3.x documentation pattern:
+        https://www.paddleocr.ai/latest/en/version3.x/algorithm/PP-OCRv5/PP-OCRv5_multi_languages.html#2-quick-start
 
         Args:
             lang: Language for OCR (default: 'en'). Supported: ch, en, fr, de, japan, korean, etc.
-            use_gpu: Reserved for future use (PaddleOCR 3.x auto-detects GPU)
-            use_pp_ocr_v5_server: Reserved for compatibility (always True in PaddleOCR 3.x)
-            use_angle_cls: Reserved for compatibility (configured via PaddleX config if needed)
-            det_limit_side_len: Reserved for compatibility (configured via PaddleX config if needed)
-            rec_batch_num: Reserved for compatibility (configured via PaddleX config if needed)
-            **kwargs: Additional PaddleOCR initialization parameters
         """
         try:
             if self.ocr is None:
@@ -85,20 +74,15 @@ class OCRService:
                 logger.info(f"Documentation: https://www.paddleocr.ai/")
                 logger.info("=" * 60)
 
-                # PaddleOCR 3.x simplified API (ROOT CAUSE FIX)
-                # PaddleOCR 3.x has a much simpler API than 2.x
-                # Ref: https://www.paddleocr.ai/latest/en/version3.x/pipeline_usage/OCR.html
+                # PaddleOCR 3.x pipeline API (following official documentation)
+                # Ref: https://www.paddleocr.ai/latest/en/version3.x/algorithm/PP-OCRv5/PP-OCRv5_multi_languages.html#2-quick-start
 
-                paddle_config = {
-                    'lang': lang,
-                    'use_gpu': use_gpu,
-                }
-
-                # Add angle classification if enabled (only supported parameter beyond basics)
-                if use_angle_cls:
-                    paddle_config['use_angle_cls'] = True
-
-                self.ocr = PaddleOCR(**paddle_config)
+                self.ocr = PaddleOCR(
+                    lang=lang,  # Specify language recognition model
+                    use_doc_orientation_classify=False,  # Disable document orientation classification
+                    use_doc_unwarping=False,  # Disable text image unwarping
+                    use_textline_orientation=False,  # Disable text line orientation classification
+                )
                 
                 logger.info("✓ PaddleOCR initialized successfully!")
                 logger.info("  - Using PP-OCRv5_server_det (text detection)")

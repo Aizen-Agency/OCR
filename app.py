@@ -139,12 +139,8 @@ def _register_services(app: Flask) -> None:
         ocr_service = OCRService()
         ocr_config = get_config()
         
-        # Initialize OCR with PaddleOCR 3.x supported parameters
-        ocr_service.initialize_ocr(
-            lang=ocr_config.OCR_LANG,
-            use_gpu=ocr_config.USE_GPU,
-            use_angle_cls=ocr_config.USE_ANGLE_CLS
-        )
+        # Initialize OCR with PaddleOCR 3.x pipeline API (following official docs)
+        ocr_service.initialize_ocr(lang=ocr_config.OCR_LANG)
 
         # Store service instances in app context for access by controllers
         app.ocr_service = ocr_service

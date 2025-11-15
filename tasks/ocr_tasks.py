@@ -38,12 +38,8 @@ def preload_ocr_service(sender, **kwargs):
     try:
         ocr_service = OCRService()
         config = get_config()
-        # Initialize OCR with PaddleOCR 3.x supported parameters
-        ocr_service.initialize_ocr(
-            lang=config.OCR_LANG,
-            use_gpu=config.USE_GPU,
-            use_angle_cls=config.USE_ANGLE_CLS
-        )
+        # Initialize OCR with PaddleOCR 3.x pipeline API (following official docs)
+        ocr_service.initialize_ocr(lang=config.OCR_LANG)
         logger.info("OCR service pre-initialized successfully - ready to process tasks!")
     except Exception as e:
         logger.warning(f"Failed to pre-initialize OCR service: {str(e)}. Will initialize on first task.")
@@ -105,12 +101,8 @@ def get_ocr_service() -> OCRService:
         ocr_service = OCRService()
         from config import get_config
         config = get_config()
-        # Initialize OCR with PaddleOCR 3.x supported parameters
-        ocr_service.initialize_ocr(
-            lang=config.OCR_LANG,
-            use_gpu=config.USE_GPU,
-            use_angle_cls=config.USE_ANGLE_CLS
-        )
+        # Initialize OCR with PaddleOCR 3.x pipeline API (following official docs)
+        ocr_service.initialize_ocr(lang=config.OCR_LANG)
     return ocr_service
 
 
