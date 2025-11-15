@@ -51,6 +51,7 @@ services:
     volumes:
       - ocr_uploads:/tmp/ocr_uploads
       - logs_data:/app/logs  # Use named volume instead of bind mount for read-only compatibility
+      - paddlex_models:/tmp/.paddlex  # Persist PaddleOCR models across restarts
     restart: unless-stopped
     depends_on:
       - redis
@@ -97,10 +98,17 @@ services:
     volumes:
       - ocr_uploads:/tmp/ocr_uploads
       - logs_data:/app/logs  # Use named volume for consistency
+      - paddlex_models:/tmp/.paddlex  # Persist PaddleOCR models across restarts
     restart: unless-stopped
     depends_on:
       - redis
       - ocr-microservice
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
     networks:
       - ocr_network
     deploy:
@@ -148,6 +156,8 @@ volumes:
   redis_data:
     driver: local
   logs_data:
+    driver: local
+  paddlex_models:
     driver: local
 
 networks:
