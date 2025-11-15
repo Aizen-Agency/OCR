@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 # Get configuration
 config = get_config()
 
+# Log the actual URLs being used for debugging
+logger.info(f"Initializing Celery with broker: {config.CELERY_BROKER_URL}")
+logger.info(f"Initializing Celery with backend: {config.CELERY_RESULT_BACKEND}")
+
 # Create Celery app instance
 celery_app = Celery(
     'ocr_tasks',
@@ -20,8 +24,10 @@ celery_app = Celery(
     include=['tasks.ocr_tasks']
 )
 
-# Celery configuration
+# Celery configuration - explicitly set broker and backend URLs
 celery_app.conf.update(
+    broker_url=config.CELERY_BROKER_URL,  # Explicit broker URL
+    result_backend=config.CELERY_RESULT_BACKEND,  # Explicit result backend
     task_serializer='json',
     accept_content=['json'],
     result_serializer='json',
@@ -34,6 +40,11 @@ celery_app.conf.update(
     worker_max_tasks_per_child=10,  # Restart worker after 10 tasks to prevent memory leaks
     worker_concurrency=1,  # Use only 1 worker to avoid multiple model loads (CRITICAL FIX)
     result_expires=3600,  # Results expire after 1 hour
+    broker_connection_retry_on_startup=True,  # Retry connection on startup
+    broker_connection_retry=True,  # Enable connection retries
+    broker_connection_max_retries=100,  # Maximum retry attempts
 )
 
-logger.info(f"Celery app configured with broker: {config.CELERY_BROKER_URL}")
+logger.info(f"Celery app configured successfully")
+logger.info(f"  Broker URL: {celery_app.conf.broker_url}")
+logger.info(f"  Result Backend: {celery_app.conf.result_backend}")

@@ -67,12 +67,16 @@ class Config:
     MIN_CONFIDENCE = float(os.getenv('MIN_CONFIDENCE', 0.0))
 
     # Redis configuration
-    REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+    # Default to 'redis' service name for Docker compatibility, fallback to 'localhost' for local dev
+    REDIS_URL = os.getenv('REDIS_URL', 'redis://redis:6379/0')
     REDIS_CACHE_TTL = int(os.getenv('REDIS_CACHE_TTL', 3600))  # 1 hour default
 
     # Celery configuration
-    CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
-    CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
+    # Use explicit env vars first, then fallback to REDIS_URL
+    # This allows setting REDIS_URL once and having Celery use it automatically
+    _default_redis_url = os.getenv('REDIS_URL', 'redis://redis:6379/0')
+    CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', _default_redis_url)
+    CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', _default_redis_url)
 
     # Rate limiting configuration
     RATE_LIMIT_PER_MINUTE = int(os.getenv('RATE_LIMIT_PER_MINUTE', 10))

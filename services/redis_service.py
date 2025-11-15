@@ -31,18 +31,31 @@ class RedisService:
 
     def _connect(self) -> None:
         """Initialize Redis connection."""
+        redis_url = self.config.REDIS_URL
+        logger.info(f"Attempting to connect to Redis at: {redis_url}")
+        
         try:
             self.redis_client = redis.from_url(
-                self.config.REDIS_URL,
+                redis_url,
                 decode_responses=True,
                 socket_connect_timeout=5,
-                socket_timeout=5
+                socket_timeout=5,
+                retry_on_timeout=True,
+                health_check_interval=30
             )
             # Test connection
             self.redis_client.ping()
-            logger.info(f"Redis connected successfully: {self.config.REDIS_URL}")
+            logger.info(f"Redis connected successfully: {redis_url}")
+        except redis.ConnectionError as e:
+            logger.error(f"Redis connection error: {str(e)}")
+            logger.error(f"  Attempted URL: {redis_url}")
+            logger.warning("Redis operations will be disabled. OCR will work without caching.")
+            logger.warning("  Check that Redis service is running and accessible at the configured URL.")
+            self.redis_client = None
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {str(e)}")
+            logger.error(f"  Attempted URL: {redis_url}")
+            logger.error(f"  Error type: {type(e).__name__}")
             logger.warning("Redis operations will be disabled. OCR will work without caching.")
             self.redis_client = None
 

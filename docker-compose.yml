@@ -44,8 +44,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
       - LOG_LEVEL=DEBUG
       - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL if not set
       - RATE_LIMIT_PER_MINUTE=10
     volumes:
       - ocr_uploads:/tmp/ocr_uploads
@@ -89,8 +88,7 @@ services:
       - DET_LIMIT_SIDE_LEN=1280
       - REC_BATCH_NUM=8
       - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL if not set
       - LOG_LEVEL=INFO
     command: celery -A celery_app worker --loglevel=info --concurrency=4
     volumes:
