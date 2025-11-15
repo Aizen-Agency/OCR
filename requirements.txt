@@ -3,7 +3,7 @@ Werkzeug==3.0.1
 python-dotenv==1.0.0
 celery==5.3.4
 redis==5.0.1
-paddlepaddle==3.0.0
+paddlepaddle==3.2.0
 paddleocr>=2.8.0
 PyMuPDF==1.23.8
 Pillow==10.1.0
