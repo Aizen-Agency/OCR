@@ -11,14 +11,17 @@ if [ "$(id -u)" = "0" ]; then
     # Create all required subdirectories that PaddleOCR needs
     mkdir -p /home/ocruser/.paddlex/temp
     mkdir -p /home/ocruser/.paddlex/official_models
-    mkdir -p /home/ocruser/.cache
 
     # Fix ownership on the volume (volumes are writable even with read_only: true)
     # This ensures ocruser can write to the volume-mounted directories
     chown -R ocruser:ocruser /home/ocruser/.paddlex 2>/dev/null || true
-    chown -R ocruser:ocruser /home/ocruser/.cache 2>/dev/null || true
     chmod -R 755 /home/ocruser/.paddlex 2>/dev/null || true
-    chmod -R 755 /home/ocruser/.cache 2>/dev/null || true
+
+    # Create cache directory in /tmp (tmpfs is writable even with read_only: true)
+    # PaddleOCR will use XDG_CACHE_HOME=/tmp/.cache (set in environment)
+    mkdir -p /tmp/.cache
+    chown -R ocruser:ocruser /tmp/.cache 2>/dev/null || true
+    chmod -R 755 /tmp/.cache 2>/dev/null || true
 
     # Also ensure /tmp/ocr_uploads is accessible
     mkdir -p /tmp/ocr_uploads
@@ -28,7 +31,7 @@ else
     # If not root, try to create directories (might fail, but that's okay)
     mkdir -p /home/ocruser/.paddlex/temp 2>/dev/null || true
     mkdir -p /home/ocruser/.paddlex/official_models 2>/dev/null || true
-    mkdir -p /home/ocruser/.cache 2>/dev/null || true
+    mkdir -p /tmp/.cache 2>/dev/null || true
     mkdir -p /tmp/ocr_uploads 2>/dev/null || true
 fi
 
@@ -38,8 +41,9 @@ fi
 if [ "$(id -u)" = "0" ]; then
     # Set HOME explicitly and change to /app, then execute command
     # Use 'su' without '-' to avoid login shell that tries to write to home directory
-    # Set TMPDIR to /tmp which is writable (tmpfs mount)
-    exec su ocruser -s /bin/bash -c "export HOME=/home/ocruser && export TMPDIR=/tmp && cd /app && exec \"\$@\"" -- "$@"
+    # Set TMPDIR and XDG_CACHE_HOME to /tmp which is writable (tmpfs mount)
+    # XDG_CACHE_HOME redirects PaddleOCR's cache from /home/ocruser/.cache to /tmp/.cache
+    exec su ocruser -s /bin/bash -c "export HOME=/home/ocruser && export TMPDIR=/tmp && export XDG_CACHE_HOME=/tmp/.cache && cd /app && exec \"\$@\"" -- "$@"
 else
     exec "$@"
 fi
