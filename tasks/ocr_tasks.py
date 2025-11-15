@@ -169,13 +169,17 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
             logger.info(f"OCR initialized in {time.time() - init_start:.2f}s")
 
         # Generate cache key
+        logger.info(f"Generating cache key for {filename}")
         file_hash = redis_svc.generate_file_hash(image_data)
+        logger.info(f"Cache key generated: {file_hash[:16]}...")
 
         # Process with cache
+        logger.info(f"Calling OCR processing for {filename}")
         result = _process_ocr_with_cache(
             ocr_svc, redis_svc, image_data, filename,
             ocr_svc.process_image, file_hash
         )
+        logger.info(f"OCR processing completed for {filename}, result success: {result.get('success', False)}")
 
         # Add metadata
         result['job_id'] = self.request.id

@@ -115,11 +115,13 @@ class OCRService:
 
             # Perform OCR
             logger.info(f"Starting OCR processing for {filename}")
+            logger.info(f"Image type: {type(image)}, size: {getattr(image, 'size', 'unknown')}, mode: {getattr(image, 'mode', 'unknown')}")
             logger.info(f"Converting image to numpy array...")
             image_array = np.array(image)
-            logger.info(f"Image array shape: {image_array.shape}, dtype: {image_array.dtype}")
+            logger.info(f"Image array shape: {image_array.shape}, dtype: {image_array.dtype}, min: {image_array.min()}, max: {image_array.max()}")
             logger.info(f"Calling PaddleOCR.ocr()...")
             result = self.ocr.ocr(image_array)
+            logger.warning(f"OCR result type: {type(result)}, length: {len(result) if result else 0}")
             logger.warning(f"OCR result: {result}")  # Force logging at WARNING level
             logger.info(f"OCR processing completed for {filename}")
 
