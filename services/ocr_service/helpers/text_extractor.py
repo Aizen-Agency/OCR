@@ -37,25 +37,46 @@ class TextExtractor:
 
         try:
             for line in ocr_result[0]:
-                if len(line) >= 2:
-                    bbox, (text, confidence) = line[0], line[1]
+                try:
+                    if len(line) >= 2:
+                        bbox = line[0]
+                        
+                        # Handle different PaddleOCR 3.x output formats
+                        if isinstance(line[1], (list, tuple)) and len(line[1]) == 2:
+                            # Standard format: (text, confidence)
+                            text, confidence = line[1]
+                        elif isinstance(line[1], (list, tuple)) and len(line[1]) == 1:
+                            # Single value format: just text
+                            text = line[1][0] if line[1] else ""
+                            confidence = 1.0  # Default confidence
+                        elif isinstance(line[1], str):
+                            # Direct string format
+                            text = line[1]
+                            confidence = 1.0  # Default confidence
+                        else:
+                            logger.warning(f"Unexpected line format: {line}")
+                            continue
 
-                    # Filter by confidence if specified
-                    if confidence < min_confidence:
-                        continue
+                        # Filter by confidence if specified
+                        if confidence < min_confidence:
+                            continue
 
-                    line_data = {
-                        "text": text,
-                        "confidence": float(confidence),
-                        "bbox": bbox  # Bounding box coordinates
-                    }
-                    lines.append(line_data)
+                        line_data = {
+                            "text": text,
+                            "confidence": float(confidence),
+                            "bbox": bbox  # Bounding box coordinates
+                        }
+                        lines.append(line_data)
 
-                    if text.strip():
-                        text_parts.append(text)
+                        if text.strip():
+                            text_parts.append(text)
+                            
+                except (IndexError, TypeError, ValueError) as e:
+                    logger.warning(f"Error parsing OCR line: {str(e)}, line data: {line}")
+                    continue
 
-        except (IndexError, TypeError) as e:
-            logger.warning(f"Error parsing OCR result structure: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error parsing OCR result structure: {str(e)}")
             return [], ""
 
         # Join text parts with newlines
