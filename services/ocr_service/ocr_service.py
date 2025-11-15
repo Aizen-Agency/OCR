@@ -105,11 +105,17 @@ class OCRService:
             logger.info(f"Processing image: {filename}")
 
             # Process image
+            logger.info(f"Processing image bytes for {filename}")
             image = self.image_processor.process_image_bytes(image_data)
+            logger.info(f"Image processed successfully. Size: {image.size if hasattr(image, 'size') else 'unknown'}")
 
             # Perform OCR
             logger.info(f"Starting OCR processing for {filename}")
-            result = self.ocr.ocr(np.array(image))
+            logger.info(f"Converting image to numpy array...")
+            image_array = np.array(image)
+            logger.info(f"Image array shape: {image_array.shape}, dtype: {image_array.dtype}")
+            logger.info(f"Calling PaddleOCR.ocr()...")
+            result = self.ocr.ocr(image_array)
             logger.info(f"OCR processing completed for {filename}")
 
             # Debug: Log raw result extensively (safely handle different structures)
