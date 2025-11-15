@@ -49,10 +49,12 @@ services:
       # Redirect cache to /tmp/.cache (tmpfs is writable even with read_only: true)
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
+      # Set HOME to /tmp so PaddleX uses /tmp/.paddlex (mounted volume)
+      - HOME=/tmp
     volumes:
       - ocr_uploads:/tmp/ocr_uploads
       - logs_data:/app/logs  # Use named volume instead of bind mount for read-only compatibility
-      - paddlex_models:/home/ocruser/.paddlex  # Persist PaddleOCR models across restarts
+      - paddlex_models:/tmp/.paddlex  # Mount volume at /tmp/.paddlex since HOME=/tmp
     restart: unless-stopped
     depends_on:
       - redis
@@ -96,11 +98,13 @@ services:
       # Redirect cache to /tmp/.cache (tmpfs is writable even with read_only: true)
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
+      # Set HOME to /tmp so PaddleX uses /tmp/.paddlex (mounted volume)
+      - HOME=/tmp
     command: celery -A celery_app worker --loglevel=info --concurrency=4
     volumes:
       - ocr_uploads:/tmp/ocr_uploads
       - logs_data:/app/logs  # Use named volume for consistency
-      - paddlex_models:/home/ocruser/.paddlex  # Persist PaddleOCR models across restarts
+      - paddlex_models:/tmp/.paddlex  # Mount volume at /tmp/.paddlex since HOME=/tmp
     restart: unless-stopped
     depends_on:
       - redis
