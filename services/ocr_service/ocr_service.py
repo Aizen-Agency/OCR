@@ -74,15 +74,9 @@ class OCRService:
                 logger.info(f"Documentation: https://www.paddleocr.ai/")
                 logger.info("=" * 60)
 
-                # PaddleOCR 3.x pipeline API (following official documentation)
-                # Ref: https://www.paddleocr.ai/latest/en/version3.x/algorithm/PP-OCRv5/PP-OCRv5_multi_languages.html#2-quick-start
-
-                self.ocr = PaddleOCR(
-                    lang=lang,  # Specify language recognition model
-                    use_doc_orientation_classify=False,  # Disable document orientation classification
-                    use_doc_unwarping=False,  # Disable text image unwarping
-                    use_textline_orientation=False,  # Disable text line orientation classification
-                )
+                # PaddleOCR 3.x direct API (reliable approach)
+                # Using basic constructor parameters for stability
+                self.ocr = PaddleOCR(lang=lang)
                 
                 logger.info("✓ PaddleOCR initialized successfully!")
                 logger.info("  - Using PP-OCRv5_server_det (text detection)")
@@ -124,42 +118,9 @@ class OCRService:
             logger.info(f"Converting image to numpy array...")
             image_array = np.array(image)
             logger.info(f"Image array shape: {image_array.shape}, dtype: {image_array.dtype}")
-            logger.info(f"Calling PaddleOCR.predict()...")
-            try:
-                # Pipeline API predict() might expect file path, not numpy array
-                # Let's try both approaches
-                import tempfile
-                import os
-                from PIL import Image as PILImage
-
-                # Save image to temp file for predict() method
-                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
-                    temp_path = temp_file.name
-                    # Convert numpy array back to PIL Image and save
-                    pil_image = PILImage.fromarray(image_array.astype('uint8'))
-                    pil_image.save(temp_path)
-
-                try:
-                    logger.info(f"Saved temp image to: {temp_path}")
-                    result = self.ocr.predict(temp_path)
-                    logger.info(f"OCR predict() returned: {type(result)}")
-                    logger.warning(f"OCR result: {result}")  # Force logging at WARNING level
-                finally:
-                    # Clean up temp file
-                    try:
-                        os.unlink(temp_path)
-                    except:
-                        pass
-
-            except Exception as ocr_error:
-                logger.error(f"OCR predict() failed: {str(ocr_error)}")
-                logger.error(f"Exception type: {type(ocr_error).__name__}")
-                import traceback
-                logger.error(f"OCR traceback: {traceback.format_exc()}")
-                # Fallback to direct API if predict fails
-                logger.warning("Falling back to direct API ocr() method...")
-                result = self.ocr.ocr(image_array)
-                logger.warning(f"Direct API ocr() returned: {type(result)}")
+            logger.info(f"Calling PaddleOCR.ocr()...")
+            result = self.ocr.ocr(image_array)
+            logger.warning(f"OCR result: {result}")  # Force logging at WARNING level
             logger.info(f"OCR processing completed for {filename}")
 
             # Debug: Log raw result extensively (safely handle different structures)
