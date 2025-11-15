@@ -72,7 +72,21 @@ class OCRService:
                 # PaddleOCR 3.x uses simplified API - only 'lang' parameter is needed
                 # PP-OCRv5_server models are used by default (best accuracy)
                 # Ref: https://www.paddleocr.ai/latest/en/version3.x/pipeline_usage/OCR.html
-                self.ocr = PaddleOCR(lang=lang)
+                # Force model redownload by clearing cache if initialization fails
+                try:
+                    self.ocr = PaddleOCR(lang=lang)
+                except Exception as init_error:
+                    logger.warning(f"Initial PaddleOCR init failed: {init_error}")
+                    logger.info("Attempting to clear model cache and retry...")
+                    # Clear the cached models to force redownload
+                    import shutil
+                    import os
+                    cache_dir = os.path.expanduser("~/.paddlex")
+                    if os.path.exists(cache_dir):
+                        shutil.rmtree(cache_dir)
+                        logger.info(f"Cleared model cache: {cache_dir}")
+                    # Retry initialization
+                    self.ocr = PaddleOCR(lang=lang)
                 
                 logger.info("✓ PaddleOCR initialized successfully!")
                 logger.info("  - Using PP-OCRv5_server_det (text detection)")

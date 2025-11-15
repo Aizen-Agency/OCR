@@ -39,6 +39,13 @@ fi
 # Use 'su ocruser' (not 'su - ocruser') to avoid full login shell
 # Full login shell tries to write to /home/ocruser which fails with read_only: true
 if [ "$(id -u)" = "0" ]; then
+    # Clear potentially corrupted PaddleX model cache before starting
+    # This ensures clean model downloads for PaddleOCR 3.x compatibility
+    if [ -d "/home/ocruser/.paddlex" ]; then
+        echo "Clearing existing PaddleX model cache to ensure clean downloads..."
+        rm -rf /home/ocruser/.paddlex
+    fi
+
     # Set environment variables and execute command as ocruser
     # Use 'su' without '-' to avoid login shell that tries to write to home directory
     # Set TMPDIR and XDG_CACHE_HOME to /tmp which is writable (tmpfs mount)
