@@ -6,8 +6,11 @@ LABEL maintainer="OCR Service Team" \
       description="Production-ready OCR microservice using PaddleOCR" \
       version="1.0.0"
 
-# Create non-root user for security
-RUN groupadd -r ocruser && useradd -r -g ocruser ocruser
+# Create non-root user for security with home directory
+RUN groupadd -r ocruser && \
+    useradd -r -g ocruser -m -d /home/ocruser ocruser && \
+    mkdir -p /home/ocruser/.paddlex && \
+    chown -R ocruser:ocruser /home/ocruser
 
 # Set working directory
 WORKDIR /app
@@ -51,7 +54,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     FLASK_ENV=production \
     USE_PP_OCR_V5_SERVER=true \
-    HOME=/tmp
+    HOME=/home/ocruser
 
 # Pre-download PP-OCRv5 models for faster startup (optional)
 # Note: Models will be downloaded on first run and cached in /tmp

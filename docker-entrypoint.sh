@@ -2,15 +2,15 @@
 set -e
 
 # Fix permissions for PaddleOCR model directory if volume is mounted
-if [ -d "/tmp/.paddlex" ]; then
+if [ -d "/home/ocruser/.paddlex" ]; then
     # Create subdirectories if they don't exist
-    mkdir -p /tmp/.paddlex/temp
-    mkdir -p /tmp/.paddlex/official_models
+    mkdir -p /home/ocruser/.paddlex/temp
+    mkdir -p /home/ocruser/.paddlex/official_models
     
     # Fix ownership (only if running as root, which we are in entrypoint)
     if [ "$(id -u)" = "0" ]; then
-        chown -R ocruser:ocruser /tmp/.paddlex
-        chmod -R 755 /tmp/.paddlex
+        chown -R ocruser:ocruser /home/ocruser/.paddlex
+        chmod -R 755 /home/ocruser/.paddlex
     fi
 fi
 
