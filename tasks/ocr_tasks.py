@@ -38,14 +38,11 @@ def preload_ocr_service(sender, **kwargs):
     try:
         ocr_service = OCRService()
         config = get_config()
-        # Initialize OCR with config parameters
+        # Initialize OCR with PaddleOCR 3.x supported parameters
         ocr_service.initialize_ocr(
             lang=config.OCR_LANG,
             use_gpu=config.USE_GPU,
-            use_pp_ocr_v5_server=config.USE_PP_OCR_V5_SERVER,
-            use_angle_cls=config.USE_ANGLE_CLS,
-            det_limit_side_len=config.DET_LIMIT_SIDE_LEN,
-            rec_batch_num=config.REC_BATCH_NUM
+            use_angle_cls=config.USE_ANGLE_CLS
         )
         logger.info("OCR service pre-initialized successfully - ready to process tasks!")
     except Exception as e:
@@ -108,14 +105,11 @@ def get_ocr_service() -> OCRService:
         ocr_service = OCRService()
         from config import get_config
         config = get_config()
-        # Initialize OCR with config parameters
+        # Initialize OCR with PaddleOCR 3.x supported parameters
         ocr_service.initialize_ocr(
             lang=config.OCR_LANG,
             use_gpu=config.USE_GPU,
-            use_pp_ocr_v5_server=config.USE_PP_OCR_V5_SERVER,
-            use_angle_cls=config.USE_ANGLE_CLS,
-            det_limit_side_len=config.DET_LIMIT_SIDE_LEN,
-            rec_batch_num=config.REC_BATCH_NUM
+            use_angle_cls=config.USE_ANGLE_CLS
         )
     return ocr_service
 
@@ -178,10 +172,7 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
             ocr_svc.initialize_ocr(
                 lang=config.OCR_LANG,
                 use_gpu=config.USE_GPU,
-                use_pp_ocr_v5_server=config.USE_PP_OCR_V5_SERVER,
-                use_angle_cls=config.USE_ANGLE_CLS,
-                det_limit_side_len=config.DET_LIMIT_SIDE_LEN,
-                rec_batch_num=config.REC_BATCH_NUM
+                use_angle_cls=config.USE_ANGLE_CLS
             )
             logger.info(f"OCR initialized in {time.time() - init_start:.2f}s")
 
