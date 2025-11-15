@@ -29,82 +29,104 @@ class TextExtractor:
             lines_list: List of dicts with text, confidence, and bbox
             full_text: Concatenated text from all lines
         """
-        # Debug: Log the actual structure for troubleshooting
         logger.debug(f"OCR result type: {type(ocr_result)}, length: {len(ocr_result) if ocr_result else 0}")
-        if not ocr_result or not ocr_result[0]:
+
+        if not ocr_result:
             return [], ""
 
         lines = []
         text_parts = []
 
         try:
-            # Debug: Log the actual structure
             logger.debug(f"Full OCR result structure: {ocr_result}")
 
-            # Handle PaddleOCR 3.x result format
-            if isinstance(ocr_result, list) and len(ocr_result) > 0:
-                # PaddleOCR returns [results] where results is a list of detected text regions
-                results = ocr_result[0] if isinstance(ocr_result[0], list) else ocr_result
+            detections = []
 
-                for item in results:
-                    try:
-                        # PaddleOCR 3.x format: [bbox_coords, (text, confidence)]
-                        # bbox_coords is typically [[x1,y1], [x2,y1], [x2,y2], [x1,y2]]
-                        # (text, confidence) is a tuple
+            # Normalize result into a flat list of detections:
+            # each detection should look like [bbox_coords, (text, score)]
+            if isinstance(ocr_result, list):
+                first = ocr_result[0]
 
-                        if isinstance(item, (list, tuple)) and len(item) >= 2:
-                            bbox_coords = item[0]  # List of coordinate points
-                            text_info = item[1]    # (text, confidence) tuple
+                # Case 1: nested shape: [ [ [bbox, (text,score)], ... ] ]
+                if isinstance(first, list) and first and isinstance(first[0], (list, tuple)) and len(first[0]) >= 2:
+                    detections = first
 
-                            # Extract text and confidence
-                            if isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
-                                text = str(text_info[0])
-                                confidence = float(text_info[1])
-                            elif isinstance(text_info, str):
-                                text = text_info
-                                confidence = 1.0
-                            else:
-                                logger.warning(f"Unexpected text_info format: {text_info}")
-                                continue
+                # Case 2: flat shape: [ [bbox, (text,score)], ... ]
+                elif isinstance(first, (list, tuple)) and len(first) >= 2 and isinstance(first[1], (list, tuple)):
+                    detections = ocr_result
 
-                            # Filter by confidence
-                            if confidence < min_confidence:
-                                continue
+                # Case 3: dict-based: [ {"points": ..., "text": ..., "score": ...}, ... ]
+                elif isinstance(first, dict):
+                    for d in ocr_result:
+                        pts = d.get("points") or d.get("box") or d.get("bbox")
+                        txt = d.get("text")
+                        score = d.get("score", 1.0)
+                        if txt is None:
+                            continue
+                        detections.append([pts, (txt, score)])
+                else:
+                    logger.warning(f"Unrecognized OCR result structure: {repr(ocr_result)[:500]}")
+                    return [], ""
 
-                            # Convert bbox coordinates to a simple list format
-                            if isinstance(bbox_coords, list):
-                                # Flatten the coordinates: [[x1,y1], [x2,y2], ...] -> [x1,y1,x2,y2,...]
-                                bbox_flat = []
-                                for coord in bbox_coords:
-                                    if isinstance(coord, (list, tuple)) and len(coord) >= 2:
-                                        bbox_flat.extend([float(coord[0]), float(coord[1])])
-                                    else:
-                                        bbox_flat.extend([0.0, 0.0])
-                                bbox = bbox_flat
-                            else:
-                                bbox = [0.0, 0.0, 0.0, 0.0]  # Default bbox
+            else:
+                logger.warning(f"OCR result is not a list: {type(ocr_result)}")
+                return [], ""
 
-                            line_data = {
-                                "text": text,
-                                "confidence": confidence,
-                                "bbox": bbox
-                            }
-                            lines.append(line_data)
-
-                            if text.strip():
-                                text_parts.append(text)
-
-                    except Exception as e:
-                        logger.warning(f"Error parsing OCR item: {str(e)}, item data: {item}")
+            # Now parse normalized detections
+            for item in detections:
+                try:
+                    if not isinstance(item, (list, tuple)) or len(item) < 2:
+                        logger.warning(f"Unexpected detection item format: {item}")
                         continue
+
+                    bbox_coords = item[0]
+                    text_info = item[1]
+
+                    # text_info should be (text, confidence)
+                    if isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
+                        text = str(text_info[0])
+                        confidence = float(text_info[1])
+                    elif isinstance(text_info, str):
+                        text = text_info
+                        confidence = 1.0
+                    else:
+                        logger.warning(f"Unexpected text_info format: {text_info}")
+                        continue
+
+                    if confidence < min_confidence:
+                        continue
+
+                    # Flatten bbox
+                    if isinstance(bbox_coords, list):
+                        bbox_flat = []
+                        for coord in bbox_coords:
+                            if isinstance(coord, (list, tuple)) and len(coord) >= 2:
+                                bbox_flat.extend([float(coord[0]), float(coord[1])])
+                            else:
+                                bbox_flat.extend([0.0, 0.0])
+                        bbox = bbox_flat
+                    else:
+                        bbox = [0.0, 0.0, 0.0, 0.0]
+
+                    line_data = {
+                        "text": text,
+                        "confidence": confidence,
+                        "bbox": bbox,
+                    }
+                    lines.append(line_data)
+
+                    if text.strip():
+                        text_parts.append(text)
+
+                except Exception as e:
+                    logger.warning(f"Error parsing OCR item: {str(e)}, item data: {item}")
+                    continue
 
         except Exception as e:
             logger.error(f"Error parsing OCR result structure: {str(e)}")
             return [], ""
 
-        # Join text parts with newlines
         full_text = "\n".join(text_parts)
-
         return lines, full_text
 
     def filter_by_confidence(self, lines: List[Dict[str, Any]], min_confidence: float) -> List[Dict[str, Any]]:
