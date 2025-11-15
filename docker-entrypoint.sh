@@ -39,11 +39,11 @@ fi
 # Use 'su ocruser' (not 'su - ocruser') to avoid full login shell
 # Full login shell tries to write to /home/ocruser which fails with read_only: true
 if [ "$(id -u)" = "0" ]; then
-    # Set HOME explicitly and change to /app, then execute command
+    # Set environment variables and execute command as ocruser
     # Use 'su' without '-' to avoid login shell that tries to write to home directory
     # Set TMPDIR and XDG_CACHE_HOME to /tmp which is writable (tmpfs mount)
     # XDG_CACHE_HOME redirects PaddleOCR's cache from /home/ocruser/.cache to /tmp/.cache
-    exec su ocruser -s /bin/bash -c "export HOME=/home/ocruser && export TMPDIR=/tmp && export XDG_CACHE_HOME=/tmp/.cache && cd /app && exec \"\$@\"" -- "$@"
+    exec su ocruser -c "cd /app && export HOME=/home/ocruser TMPDIR=/tmp XDG_CACHE_HOME=/tmp/.cache && exec \"$@\""
 else
     exec "$@"
 fi
