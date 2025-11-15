@@ -2,12 +2,25 @@
 OCR Service - Main service class for handling OCR operations
 """
 
+import os
 import logging
 import gc
 import psutil
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 from PIL import Image
+from pathlib import Path
+
+# Configure PaddleOCR model directories explicitly (ROOT CAUSE FIX)
+# Instead of manipulating HOME globally, use PaddleOCR's built-in configuration
+
+# Set PaddleX cache directory explicitly
+paddle_cache_dir = '/tmp/.paddlex'
+os.makedirs(paddle_cache_dir, exist_ok=True)
+
+# Configure PaddlePaddle environment variables for proper model caching
+os.environ['PADDLEPADDLE_CACHE_DIR'] = paddle_cache_dir
+os.environ['XDG_CACHE_HOME'] = '/tmp/.cache'
 
 from paddleocr import PaddleOCR
 from .helpers.image_processor import ImageProcessor
@@ -69,10 +82,30 @@ class OCRService:
                 logger.info(f"Documentation: https://www.paddleocr.ai/")
                 logger.info("=" * 60)
 
-                # PaddleOCR 3.x uses simplified API - only 'lang' parameter is needed
-                # PP-OCRv5_server models are used by default (best accuracy)
+                # PaddleOCR 3.x configuration with explicit model directories (ROOT CAUSE FIX)
+                # This replaces the global HOME manipulation with proper configuration
                 # Ref: https://www.paddleocr.ai/latest/en/version3.x/pipeline_usage/OCR.html
-                self.ocr = PaddleOCR(lang=lang)
+
+                paddle_config = {
+                    'lang': lang,
+                    # Explicitly set model directories to avoid automatic detection issues
+                    'model_dir': '/tmp/.paddlex/official_models',
+                    'det_model_dir': None,  # Use default PP-OCRv5_server_det
+                    'rec_model_dir': None,  # Use default PP-OCRv5_server_rec
+                    'cls_model_dir': None,  # Use default if angle classification enabled
+                    # Performance optimizations
+                    'use_gpu': False,  # Explicit CPU mode
+                    'enable_mkldnn': True,  # CPU optimization
+                    'cpu_threads': 4,  # Match worker concurrency
+                    # Disable automatic model downloads during init (handle manually)
+                    'download_models': True,
+                }
+
+                # Add angle classification if enabled
+                if self.config.USE_ANGLE_CLS:
+                    paddle_config['use_angle_cls'] = True
+
+                self.ocr = PaddleOCR(**paddle_config)
                 
                 logger.info("✓ PaddleOCR initialized successfully!")
                 logger.info("  - Using PP-OCRv5_server_det (text detection)")

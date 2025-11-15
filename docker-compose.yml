@@ -46,11 +46,10 @@ services:
       - REDIS_URL=redis://redis:6379/0
       # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL if not set
       - RATE_LIMIT_PER_MINUTE=10
-      # Redirect cache to /tmp/.cache (tmpfs is writable even with read_only: true)
+      # Configure PaddlePaddle cache directories explicitly
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
-      # Set HOME to /tmp so PaddleX uses /tmp/.paddlex (mounted volume)
-      - HOME=/tmp
+      - PADDLEPADDLE_CACHE_DIR=/tmp/.paddlex
     volumes:
       - ocr_uploads:/tmp/ocr_uploads
       - logs_data:/app/logs  # Use named volume instead of bind mount for read-only compatibility
@@ -95,11 +94,10 @@ services:
       - REDIS_URL=redis://redis:6379/0
       # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL if not set
       - LOG_LEVEL=INFO
-      # Redirect cache to /tmp/.cache (tmpfs is writable even with read_only: true)
+      # Configure PaddlePaddle cache directories explicitly
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
-      # Set HOME to /tmp so PaddleX uses /tmp/.paddlex (mounted volume)
-      - HOME=/tmp
+      - PADDLEPADDLE_CACHE_DIR=/tmp/.paddlex
     command: celery -A celery_app worker --loglevel=info --concurrency=4
     volumes:
       - ocr_uploads:/tmp/ocr_uploads

@@ -2,9 +2,18 @@
 Celery Tasks for OCR Processing
 """
 
+import os
 import logging
 from typing import Dict, Any
 from celery import Task, signals
+
+# Configure PaddleOCR environment (same as OCR service - ROOT CAUSE FIX)
+# Use explicit PaddlePaddle environment variables instead of HOME manipulation
+paddle_cache_dir = '/tmp/.paddlex'
+os.makedirs(paddle_cache_dir, exist_ok=True)
+os.environ['PADDLEPADDLE_CACHE_DIR'] = paddle_cache_dir
+os.environ['XDG_CACHE_HOME'] = '/tmp/.cache'
+
 from celery_app import celery_app
 from services.ocr_service.ocr_service import OCRService
 from services.redis_service import RedisService
