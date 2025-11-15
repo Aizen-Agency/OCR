@@ -43,7 +43,7 @@ services:
       - REC_BATCH_NUM=8
       - MAX_CONTENT_LENGTH=52428800
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
-      - LOG_LEVEL=INFO
+      - LOG_LEVEL=DEBUG
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0

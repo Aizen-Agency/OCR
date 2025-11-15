@@ -110,6 +110,12 @@ class OCRService:
             # Perform OCR
             result = self.ocr.ocr(np.array(image))
 
+            # Debug: Log raw result
+            logger.debug(f"Raw PaddleOCR result type: {type(result)}")
+            logger.debug(f"Raw PaddleOCR result length: {len(result) if result else 0}")
+            if result and len(result) > 0 and len(result[0]) > 0:
+                logger.debug(f"First 3 OCR detections: {result[0][:3]}")
+
             # Extract text and confidence
             lines, full_text = self.text_extractor.extract_from_ocr_result(result)
 
