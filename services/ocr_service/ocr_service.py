@@ -140,7 +140,7 @@ class OCRService:
 
                 # Set timeout for OCR call
                 signal.signal(signal.SIGALRM, timeout_handler)
-                signal.alarm(30)  # 30 second timeout
+                signal.alarm(180)  # 30 second timeout
 
                 result = self.ocr.ocr(image_array)
 
