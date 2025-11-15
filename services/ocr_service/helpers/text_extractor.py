@@ -42,7 +42,12 @@ class TextExtractor:
 
             detections = []
 
-            # Handle PaddleOCR Pipeline API format first
+            # Handle PaddleOCR Pipeline API format - list containing dict with OCR results
+            if isinstance(ocr_result, list) and len(ocr_result) == 1 and isinstance(ocr_result[0], dict):
+                logger.debug("Detected Pipeline API list[dict] result format")
+                ocr_result = ocr_result[0]  # Extract the single dict
+
+            # Handle PaddleOCR Pipeline API format - direct dict
             if isinstance(ocr_result, dict) and 'rec_texts' in ocr_result and 'rec_scores' in ocr_result:
                 # Pipeline API format: {'rec_texts': [...], 'rec_scores': [...], 'dt_polys': array(...)}
                 logger.debug("Detected Pipeline API dict result format")
