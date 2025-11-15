@@ -109,7 +109,7 @@ class OCRService:
 
             # Perform OCR
             logger.info(f"Starting OCR processing for {filename}")
-            result = self.ocr.ocr(np.array(image), cls=True)
+            result = self.ocr.ocr(np.array(image))
             logger.info(f"OCR processing completed for {filename}")
 
             # Debug: Log raw result extensively
