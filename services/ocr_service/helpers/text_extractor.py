@@ -29,6 +29,16 @@ class TextExtractor:
             lines_list: List of dicts with text, confidence, and bbox
             full_text: Concatenated text from all lines
         """
+        # Debug logging to understand PaddleOCR 3.x output format
+        logger.debug(f"OCR result type: {type(ocr_result)}")
+        logger.debug(f"OCR result length: {len(ocr_result) if ocr_result else 0}")
+        if ocr_result and len(ocr_result) > 0:
+            logger.debug(f"OCR result[0] type: {type(ocr_result[0])}")
+            logger.debug(f"OCR result[0] length: {len(ocr_result[0]) if ocr_result[0] else 0}")
+            if ocr_result[0] and len(ocr_result[0]) > 0:
+                logger.debug(f"First line sample: {ocr_result[0][0]}")
+                logger.debug(f"First line type: {type(ocr_result[0][0])}")
+        
         if not ocr_result or not ocr_result[0]:
             return [], ""
 
