@@ -34,13 +34,17 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code with proper ownership
 COPY --chown=ocruser:ocruser . .
 
+# Copy and set up entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Create upload directory with proper permissions
 RUN mkdir -p /tmp/ocr_uploads && \
     chown -R ocruser:ocruser /tmp/ocr_uploads && \
     chmod 755 /tmp/ocr_uploads
 
-# Switch to non-root user
-USER ocruser
+# Keep as root for entrypoint (will switch to ocruser in entrypoint script)
+# USER ocruser
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -60,6 +64,9 @@ EXPOSE 5000
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:5000/health/ready || exit 1
+
+# Use entrypoint to fix permissions before running command
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 # Run the application with proper signal handling
 CMD ["python", "app.py"]
