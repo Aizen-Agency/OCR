@@ -85,10 +85,8 @@ class OCRService:
                         'rec_batch_num': rec_batch_num,  # Batch processing for better throughput (24GB VPS optimized)
                         'det_db_thresh': 0.3,  # Detection threshold (default: 0.3)
                         'det_db_box_thresh': 0.6,  # Box threshold (default: 0.6)
-                        'rec_algorithm': 'SVTR_LCNet',  # PP-OCRv5 uses SVTR_LCNet by default
                         'use_space_char': True,  # Preserve spaces in recognized text
                         'drop_score': 0.5,  # Drop results below this confidence (default: 0.5)
-                        'show_log': False,  # Reduce console noise
                     })
                     
                     # GPU-specific optimizations
