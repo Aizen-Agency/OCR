@@ -42,9 +42,35 @@ class TextExtractor:
 
             detections = []
 
+            # Handle PaddleOCR Pipeline API format first
+            if isinstance(ocr_result, dict) and 'rec_texts' in ocr_result and 'rec_scores' in ocr_result:
+                # Pipeline API format: {'rec_texts': [...], 'rec_scores': [...], 'dt_polys': array(...)}
+                logger.debug("Detected Pipeline API result format")
+                rec_texts = ocr_result.get('rec_texts', [])
+                rec_scores = ocr_result.get('rec_scores', [])
+                dt_polys = ocr_result.get('dt_polys', [])
+
+                for i, (text, score) in enumerate(zip(rec_texts, rec_scores)):
+                    if score >= min_confidence:
+                        # Convert polygon to bounding box format
+                        bbox = []
+                        if i < len(dt_polys):
+                            poly = dt_polys[i]
+                            if hasattr(poly, 'tolist'):  # numpy array
+                                poly = poly.tolist()
+                            # Convert polygon to simple bbox [x1,y1,x2,y2,x3,y3,x4,y4]
+                            bbox = [coord for point in poly for coord in point]
+
+                        lines.append({
+                            "text": text,
+                            "confidence": float(score),
+                            "bbox": bbox
+                        })
+                        text_parts.append(text)
+
             # Normalize result into a flat list of detections:
             # each detection should look like [bbox_coords, (text, score)]
-            if isinstance(ocr_result, list):
+            elif isinstance(ocr_result, list):
                 first = ocr_result[0]
 
                 # Case 1: nested shape: [ [ [bbox, (text,score)], ... ] ]
