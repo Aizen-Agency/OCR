@@ -176,7 +176,10 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
         return result
 
     except Exception as e:
+        import traceback
         logger.error(f"Error in process_image_task: {str(e)}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        logger.error(f"Full traceback:\n{traceback.format_exc()}")
         return {
             "success": False,
             "error": str(e),

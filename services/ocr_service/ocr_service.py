@@ -139,7 +139,10 @@ class OCRService:
             }
 
         except Exception as e:
+            import traceback
             logger.error(f"Error processing image {filename}: {str(e)}")
+            logger.error(f"Exception type: {type(e).__name__}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             return {
                 "text": "",
                 "lines": [],
