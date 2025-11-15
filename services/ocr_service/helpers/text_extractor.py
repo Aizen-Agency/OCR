@@ -45,7 +45,7 @@ class TextExtractor:
             # Handle PaddleOCR Pipeline API format first
             if isinstance(ocr_result, dict) and 'rec_texts' in ocr_result and 'rec_scores' in ocr_result:
                 # Pipeline API format: {'rec_texts': [...], 'rec_scores': [...], 'dt_polys': array(...)}
-                logger.debug("Detected Pipeline API result format")
+                logger.debug("Detected Pipeline API dict result format")
                 rec_texts = ocr_result.get('rec_texts', [])
                 rec_scores = ocr_result.get('rec_scores', [])
                 dt_polys = ocr_result.get('dt_polys', [])
@@ -67,6 +67,39 @@ class TextExtractor:
                             "bbox": bbox
                         })
                         text_parts.append(text)
+
+            # Handle Pipeline API list format (result objects with methods)
+            elif isinstance(ocr_result, list) and ocr_result and hasattr(ocr_result[0], 'print'):
+                logger.debug("Detected Pipeline API list result format (objects with methods)")
+                for result_obj in ocr_result:
+                    # Try to extract data from result object
+                    try:
+                        # Access the result data - might be in result_obj.res or similar
+                        if hasattr(result_obj, 'res'):
+                            res_data = result_obj.res
+                            if isinstance(res_data, dict):
+                                rec_texts = res_data.get('rec_texts', [])
+                                rec_scores = res_data.get('rec_scores', [])
+                                dt_polys = res_data.get('dt_polys', [])
+
+                                for i, (text, score) in enumerate(zip(rec_texts, rec_scores)):
+                                    if score >= min_confidence:
+                                        bbox = []
+                                        if i < len(dt_polys):
+                                            poly = dt_polys[i]
+                                            if hasattr(poly, 'tolist'):
+                                                poly = poly.tolist()
+                                            bbox = [coord for point in poly for coord in point]
+
+                                        lines.append({
+                                            "text": text,
+                                            "confidence": float(score),
+                                            "bbox": bbox
+                                        })
+                                        text_parts.append(text)
+                    except Exception as e:
+                        logger.warning(f"Failed to extract data from result object: {e}")
+                        continue
 
             # Normalize result into a flat list of detections:
             # each detection should look like [bbox_coords, (text, score)]
