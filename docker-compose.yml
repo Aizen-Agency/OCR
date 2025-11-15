@@ -50,6 +50,7 @@ services:
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
       - PADDLEPADDLE_CACHE_DIR=/tmp/.paddlex
+      # HOME is set in Python code before PaddleOCR import
     volumes:
       - ocr_uploads:/tmp/ocr_uploads
       - logs_data:/app/logs  # Use named volume instead of bind mount for read-only compatibility
@@ -98,6 +99,7 @@ services:
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
       - PADDLEPADDLE_CACHE_DIR=/tmp/.paddlex
+      # HOME is set in Python code before PaddleOCR import
     command: celery -A celery_app worker --loglevel=info --concurrency=4
     volumes:
       - ocr_uploads:/tmp/ocr_uploads

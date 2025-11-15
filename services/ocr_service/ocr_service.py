@@ -11,9 +11,11 @@ import numpy as np
 from PIL import Image
 from pathlib import Path
 
-# Configure PaddleOCR model directories explicitly (ROOT CAUSE FIX)
-# Instead of manipulating HOME globally, use PaddleOCR's built-in configuration
+# CRITICAL FIX: Set HOME environment variable BEFORE any PaddleX imports
+# PaddleX determines cache directory during import using Path.home()
+os.environ['HOME'] = '/tmp'
 
+# Configure PaddleOCR model directories explicitly (ROOT CAUSE FIX)
 # Set PaddleX cache directory explicitly
 paddle_cache_dir = '/tmp/.paddlex'
 os.makedirs(paddle_cache_dir, exist_ok=True)
@@ -22,6 +24,7 @@ os.makedirs(paddle_cache_dir, exist_ok=True)
 os.environ['PADDLEPADDLE_CACHE_DIR'] = paddle_cache_dir
 os.environ['XDG_CACHE_HOME'] = '/tmp/.cache'
 
+# Now import PaddleOCR after HOME is set
 from paddleocr import PaddleOCR
 from .helpers.image_processor import ImageProcessor
 from .helpers.pdf_processor import PDFProcessor

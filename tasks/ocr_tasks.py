@@ -7,8 +7,11 @@ import logging
 from typing import Dict, Any
 from celery import Task, signals
 
+# CRITICAL FIX: Set HOME environment variable BEFORE any PaddleX imports
+# PaddleX determines cache directory during import using Path.home()
+os.environ['HOME'] = '/tmp'
+
 # Configure PaddleOCR environment (same as OCR service - ROOT CAUSE FIX)
-# Use explicit PaddlePaddle environment variables instead of HOME manipulation
 paddle_cache_dir = '/tmp/.paddlex'
 os.makedirs(paddle_cache_dir, exist_ok=True)
 os.environ['PADDLEPADDLE_CACHE_DIR'] = paddle_cache_dir

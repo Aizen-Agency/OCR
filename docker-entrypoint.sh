@@ -34,10 +34,10 @@ fi
 
 # Execute the original command as ocruser
 # Use 'su ocruser' (not 'su - ocruser') to avoid full login shell
-# PaddlePaddle environment is configured in Python code (ROOT CAUSE FIX)
+# PaddlePaddle environment and HOME are configured in Python code (ROOT CAUSE FIX)
 if [ "$(id -u)" = "0" ]; then
     # Set environment variables and execute command as ocruser
-    # PaddlePaddle cache directories are configured in Python before imports
+    # PaddlePaddle cache directories and HOME are configured in Python before imports
     # TMPDIR and XDG_CACHE_HOME are in /tmp (writable tmpfs)
     cmd_string="cd /app && export TMPDIR=/tmp XDG_CACHE_HOME=/tmp/.cache PADDLEPADDLE_CACHE_DIR=/tmp/.paddlex && exec"
     for arg in "$@"; do
