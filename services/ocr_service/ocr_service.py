@@ -46,91 +46,45 @@ class OCRService:
                       rec_batch_num: int = 8,
                       **kwargs) -> None:
         """
-        Initialize the PaddleOCR model with PP-OCRv5_server_det for production use.
+        Initialize the PaddleOCR 3.x model with PP-OCRv5 (default in PaddleOCR 3.0).
+        
+        According to official docs: https://www.paddleocr.ai/latest/en/version3.x/pipeline_usage/OCR.html
+        PaddleOCR 3.x uses PP-OCRv5_server models by default with simplified API.
 
         Args:
-            lang: Language for OCR (default: 'en')
-            use_gpu: Whether to use GPU for inference
-            use_pp_ocr_v5_server: Whether to use PP-OCRv5 server model (default: True)
-            use_angle_cls: Enable angle classification for rotated text (default: True)
-            det_limit_side_len: Max side length for detection (default: 1280)
-            rec_batch_num: Batch size for recognition (default: 8, optimized for 24GB VPS)
+            lang: Language for OCR (default: 'en'). Supported: ch, en, fr, de, japan, korean, etc.
+            use_gpu: Reserved for future use (PaddleOCR 3.x auto-detects GPU)
+            use_pp_ocr_v5_server: Reserved for compatibility (always True in PaddleOCR 3.x)
+            use_angle_cls: Reserved for compatibility (configured via PaddleX config if needed)
+            det_limit_side_len: Reserved for compatibility (configured via PaddleX config if needed)
+            rec_batch_num: Reserved for compatibility (configured via PaddleX config if needed)
             **kwargs: Additional PaddleOCR initialization parameters
         """
         try:
             if self.ocr is None:
-                logger.info(f"Initializing PaddleOCR with language: {lang}, PP-OCRv5: {use_pp_ocr_v5_server}")
+                logger.info("=" * 60)
+                logger.info("Initializing PaddleOCR 3.x (PP-OCRv5)")
+                logger.info(f"Language: {lang}")
+                logger.info(f"Model: PP-OCRv5_server (default in PaddleOCR 3.0)")
+                logger.info(f"Documentation: https://www.paddleocr.ai/")
+                logger.info("=" * 60)
 
-                # Configure based on use case: development (fast) vs production (accurate)
-                ocr_config = {
-                    'lang': lang,
-                }
-
-                # GPU configuration - PaddleOCR auto-detects GPU availability
-                # If GPU is needed, set CUDA_VISIBLE_DEVICES environment variable externally
-                if use_gpu:
-                    logger.info("GPU mode requested - ensure CUDA_VISIBLE_DEVICES is set if GPU is available")
-
-                if use_pp_ocr_v5_server:
-                    # PRODUCTION MODE: Use PP-OCRv5 server models (best accuracy, slower startup)
-                    # PaddleOCR 3.x uses v5 server models by default when no version specified
-                    logger.info("PRODUCTION MODE: Using PP-OCRv5 server models (high accuracy, 3-5 min startup)")
-                    logger.info(f"  - Angle classification: {use_angle_cls}")
-                    logger.info(f"  - Detection limit: {det_limit_side_len}px")
-                    logger.info(f"  - Recognition batch: {rec_batch_num}")
-                    
-                    ocr_config.update({
-                        'use_angle_cls': use_angle_cls,  # Enable angle classification for rotated text
-                        'det_limit_side_len': det_limit_side_len,  # Higher detection limit for better accuracy
-                        'rec_batch_num': rec_batch_num,  # Batch processing for better throughput (24GB VPS optimized)
-                        'det_db_thresh': 0.3,  # Detection threshold (default: 0.3)
-                        'det_db_box_thresh': 0.6,  # Box threshold (default: 0.6)
-                        'use_space_char': True,  # Preserve spaces in recognized text
-                        'drop_score': 0.5,  # Drop results below this confidence (default: 0.5)
-                    })
-                    
-                    # GPU-specific optimizations
-                    if use_gpu:
-                        ocr_config.update({
-                            'use_gpu': True,
-                            'gpu_mem': 2000,  # Allocate 2GB GPU memory per process
-                            'enable_mkldnn': False,  # Disable MKLDNN when using GPU
-                        })
-                        logger.info("  - GPU acceleration ENABLED with 2GB memory allocation")
-                    else:
-                        ocr_config.update({
-                            'use_gpu': False,
-                            'enable_mkldnn': True,  # Enable Intel MKL-DNN for CPU optimization
-                            'cpu_threads': 4,  # Use 4 CPU threads (optimal for 24GB VPS)
-                        })
-                        logger.info("  - CPU mode with MKL-DNN optimization (4 threads)")
-                else:
-                    # DEVELOPMENT MODE: Use lightweight models (faster startup, good accuracy)
-                    logger.info("DEVELOPMENT MODE: Using lightweight models (30-60 sec startup)")
-                    ocr_config.update({
-                        'use_angle_cls': False,  # Disable angle classification for faster processing
-                        'det_limit_side_len': 960,  # Smaller detection size for speed
-                        'rec_batch_num': 6,  # Smaller batch for lower memory usage
-                    })
-
-                # Merge with any additional kwargs
-                ocr_config.update(kwargs)
-
-                # Try to initialize PaddleOCR with error handling
-                try:
-                    self.ocr = PaddleOCR(**ocr_config)
-                    logger.info("PaddleOCR with PP-OCRv5_server_det initialized successfully")
-                except TypeError as param_error:
-                    # If parameters are not supported, try with minimal config
-                    logger.warning(f"Some parameters not supported: {param_error}. Trying minimal config.")
-                    minimal_config = {'lang': lang}
-                    minimal_config.update(kwargs)
-                    self.ocr = PaddleOCR(**minimal_config)
-                    logger.info("PaddleOCR initialized with minimal configuration")
+                # PaddleOCR 3.x uses simplified API - only 'lang' parameter is needed
+                # PP-OCRv5_server models are used by default (best accuracy)
+                # Ref: https://www.paddleocr.ai/latest/en/version3.x/pipeline_usage/OCR.html
+                self.ocr = PaddleOCR(lang=lang)
+                
+                logger.info("✓ PaddleOCR initialized successfully!")
+                logger.info("  - Using PP-OCRv5_server_det (text detection)")
+                logger.info("  - Using PP-OCRv5_server_rec (text recognition)")
+                logger.info("  - CPU-optimized (auto-detected)")
+                logger.info("  - First inference may take 3-5 minutes to download models")
+                logger.info("=" * 60)
             else:
                 logger.info("PaddleOCR already initialized")
         except Exception as e:
             logger.error(f"Failed to initialize PaddleOCR: {str(e)}")
+            logger.error("Please check: https://www.paddleocr.ai/latest/en/version3.x/installation.html")
             raise RuntimeError(f"OCR initialization failed: {str(e)}")
 
     def process_image(self, image_data: bytes, filename: str = "") -> Dict[str, Any]:
