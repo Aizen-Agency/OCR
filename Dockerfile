@@ -12,13 +12,14 @@ RUN groupadd -r ocruser && useradd -r -g ocruser ocruser
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for PaddleOCR
+# Install system dependencies for PaddleOCR and OpenCV
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
     libgomp1 \
+    libgl1 \
     curl \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
@@ -45,11 +46,13 @@ USER ocruser
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     FLASK_ENV=production \
-    USE_PP_OCR_V5_SERVER=true
+    USE_PP_OCR_V5_SERVER=true \
+    HOME=/tmp
 
 # Pre-download PP-OCRv5 models for faster startup (optional)
-# This will cache the models in the Docker layer
-RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='en', show_log=False)" || true
+# Note: Models will be downloaded on first run and cached in /tmp
+# Commented out during build to avoid build-time issues
+# RUN python -c "from paddleocr import PaddleOCR; PaddleOCR(use_angle_cls=True, lang='en', show_log=False)" || true
 
 # Expose port
 EXPOSE 5000
