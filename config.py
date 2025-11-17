@@ -68,25 +68,21 @@ class Config:
     MIN_CONFIDENCE = float(os.getenv('MIN_CONFIDENCE', 0.0))
 
     # Redis configuration
-    # Default to 'redis' service name for Docker compatibility, fallback to 'localhost' for local dev
-    # SECURITY: Redis password is now required - set via REDIS_PASSWORD environment variable
+    # Use REDIS_URL directly from environment - should include password if required
+    # Format: redis://:password@redis:6379/0 (password will be URL-encoded automatically by redis client)
+    # If REDIS_URL is not set, fallback to constructing from REDIS_PASSWORD for backward compatibility
+    REDIS_URL = os.getenv('REDIS_URL', '')
     REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
     
-    # Build REDIS_URL with proper URL encoding for password
-    # If REDIS_URL is explicitly set, use it; otherwise construct from REDIS_PASSWORD
-    # This handles special characters in password (like / and =) by URL-encoding them
-    _redis_url_env = os.getenv('REDIS_URL', '')
-    if _redis_url_env:
-        # Use explicitly set REDIS_URL (should already have URL-encoded password if needed)
-        REDIS_URL = _redis_url_env
-    elif REDIS_PASSWORD:
-        # Construct URL with URL-encoded password (handles special characters like / and =)
-        # quote_plus encodes: / -> %2F, = -> %3D, etc.
-        encoded_password = quote_plus(REDIS_PASSWORD)
-        REDIS_URL = f'redis://:{encoded_password}@redis:6379/0'
-    else:
-        # No password - insecure but allows local dev
-        REDIS_URL = 'redis://redis:6379/0'
+    # If REDIS_URL is not set, construct it from REDIS_PASSWORD (backward compatibility)
+    if not REDIS_URL:
+        if REDIS_PASSWORD:
+            # URL-encode password to handle special characters (/, =, etc.)
+            encoded_password = quote_plus(REDIS_PASSWORD)
+            REDIS_URL = f'redis://:{encoded_password}@redis:6379/0'
+        else:
+            # No password - insecure but allows local dev
+            REDIS_URL = 'redis://redis:6379/0'
     
     REDIS_CACHE_TTL = int(os.getenv('REDIS_CACHE_TTL', 3600))  # 1 hour default
 
