@@ -168,7 +168,27 @@ python app.py
 
 ## 🔌 API Reference
 
-The API provides RESTful endpoints organized by blueprints. Base URL: `http://localhost:5000`
+The API provides RESTful endpoints organized by blueprints. 
+
+**Base URLs:**
+- Local development: `http://localhost:5000`
+- Production: `https://api.eusdr.com` (or your configured domain)
+
+### Quick Reference
+
+| Endpoint | Method | Auth Required | Description |
+|----------|--------|---------------|-------------|
+| `/health` | GET | No | Comprehensive health check |
+| `/health/ready` | GET | No | Readiness probe (Kubernetes) |
+| `/health/alive` | GET | No | Liveness probe (Kubernetes) |
+| `/ocr/image` | POST | Yes | Create OCR job for image |
+| `/ocr/pdf` | POST | Yes | Create OCR job for PDF |
+| `/ocr/batch` | POST | Yes | Create batch OCR jobs |
+| `/ocr/job/{job_id}` | GET | Yes | Get OCR job status |
+| `/ocr/job/{job_id}/result` | GET | Yes | Get OCR job result |
+| `/pdf/hybrid-extract` | POST | Yes | Create hybrid PDF extraction job |
+| `/pdf/job/{job_id}` | GET | Yes | Get hybrid PDF job status |
+| `/pdf/job/{job_id}/result` | GET | Yes | Get hybrid PDF job result |
 
 ### Health Endpoints
 
@@ -392,6 +412,149 @@ GET /ocr/job/{job_id}/result
 }
 ```
 
+### PDF Hybrid Extraction Endpoints
+
+The PDF Hybrid service intelligently processes PDFs by using direct text extraction for text-based pages and OCR for image-based pages. This provides the best of both worlds: fast text extraction for native text PDFs and accurate OCR for scanned/image-based PDFs.
+
+#### Create Hybrid PDF Extraction Job
+```http
+POST /pdf/hybrid-extract
+Content-Type: multipart/form-data
+X-Auth-Token: your-api-token-here
+
+file: <pdf_file>
+```
+
+**Query/Form Parameters:**
+- `dpi` (optional): DPI for rendering image pages (72-600, default: 300)
+- `chunk_size` (optional): Number of pages per processing chunk (default: 50)
+- `max_pages` (optional): Maximum pages to process (default: 5000)
+
+**Response (202 Accepted):**
+```json
+{
+  "job_id": "abc123-def456-ghi789",
+  "status": "processing",
+  "filename": "document.pdf",
+  "file_size": 2048000,
+  "total_pages": 150,
+  "chunk_size": 50,
+  "processing_dpi": 300,
+  "message": "Hybrid PDF extraction job created successfully. Use GET /pdf/job/{job_id} to check status."
+}
+```
+
+**How it works:**
+- Each page is classified as either "text" (native text) or "image" (scanned/image-based)
+- Text pages: Direct text extraction (fast, no OCR)
+- Image pages: OCR processing (accurate, slower)
+- Pages are processed in parallel chunks for optimal performance
+
+#### Get Hybrid PDF Job Status
+```http
+GET /pdf/job/{job_id}
+```
+
+**Response (200 OK - Completed):**
+```json
+{
+  "job_id": "abc123-def456-ghi789",
+  "status": "completed",
+  "ready": true,
+  "successful": true,
+  "failed": false,
+  "progress": {
+    "total_pages": 150,
+    "pages_processed": 150,
+    "percentage": 100.0
+  }
+}
+```
+
+**Response (202 Accepted - Processing):**
+```json
+{
+  "job_id": "abc123-def456-ghi789",
+  "status": "processing",
+  "ready": false,
+  "progress": {
+    "total_pages": 150,
+    "pages_processed": 75,
+    "percentage": 50.0
+  }
+}
+```
+
+#### Get Hybrid PDF Job Result
+```http
+GET /pdf/job/{job_id}/result
+```
+
+**Response (200 OK - Completed):**
+```json
+{
+  "job_id": "abc123-def456-ghi789",
+  "status": "completed",
+  "pages": [
+    {
+      "page": 1,
+      "type": "text",
+      "text": "Page 1 native text content...",
+      "blocks": [
+        {
+          "text": "Block text",
+          "bbox": [[10, 20], [100, 20], [100, 40], [10, 40]],
+          "type": "text"
+        }
+      ],
+      "success": true,
+      "extraction_method": "direct"
+    },
+    {
+      "page": 2,
+      "type": "image",
+      "text": "Page 2 OCR extracted text...",
+      "lines": [
+        {
+          "text": "OCR line text",
+          "confidence": 0.987,
+          "bbox": [[10, 20], [100, 20], [100, 40], [10, 40]]
+        }
+      ],
+      "success": true,
+      "extraction_method": "ocr"
+    }
+  ],
+  "full_text": "Complete document text from all pages...",
+  "total_pages": 150,
+  "pages_processed": 150,
+  "text_pages": 100,
+  "image_pages": 50,
+  "success": true,
+  "filename": "document.pdf",
+  "file_size": 2048000,
+  "processing_dpi": 300,
+  "cached": false
+}
+```
+
+**Response (202 Accepted - Still Processing):**
+```json
+{
+  "job_id": "abc123-def456-ghi789",
+  "status": "processing",
+  "ready": false,
+  "progress": {
+    "total_pages": 150,
+    "pages_processed": 75,
+    "percentage": 50.0
+  },
+  "message": "Job is still processing. Please check status again later."
+}
+```
+
+**Note:** All `/pdf/*` endpoints require the `X-Auth-Token` header, same as `/ocr/*` endpoints.
+
 ### API Key Authentication
 
 All `/ocr/*` endpoints require API key authentication via the `X-Auth-Token` header. Health check endpoints (`/health/*`) are excluded for monitoring purposes.
@@ -401,15 +564,33 @@ All `/ocr/*` endpoints require API key authentication via the `X-Auth-Token` hea
 export AUTH_TOKEN="your-api-token-here"
 ```
 
-**Example request:**
+**Example requests:**
 ```bash
-curl -X POST http://your-server/ocr/image \
+# OCR Image
+curl -X POST https://api.eusdr.com/ocr/image \
   -H "X-Auth-Token: your-api-token-here" \
   -F "file=@image.jpg"
+
+# OCR PDF
+curl -X POST https://api.eusdr.com/ocr/pdf \
+  -H "X-Auth-Token: your-api-token-here" \
+  -F "file=@document.pdf"
+
+# Hybrid PDF Extraction
+curl -X POST https://api.eusdr.com/pdf/hybrid-extract \
+  -H "X-Auth-Token: your-api-token-here" \
+  -F "file=@document.pdf" \
+  -F "dpi=300"
 ```
 
 **Error responses:**
 - **401 Unauthorized**: Missing or invalid `X-Auth-Token` header
+- **403 Forbidden**: Invalid API token
+
+**Protected endpoints:**
+- All `/ocr/*` endpoints require authentication
+- All `/pdf/*` endpoints require authentication
+- Health endpoints (`/health/*`) do NOT require authentication
 
 See [SECURITY.md](SECURITY.md) for detailed authentication configuration.
 
@@ -453,33 +634,47 @@ OCR results are automatically cached in Redis based on file content hash. Identi
 
 ### Example: Complete Async Flow
 
+#### OCR Image Flow
 ```bash
 # 1. Submit image for OCR
-curl -X POST http://localhost:5000/ocr/image \
+curl -X POST https://api.eusdr.com/ocr/image \
+  -H "X-Auth-Token: your-api-token-here" \
   -F "file=@image.jpg"
 
 # Response: {"job_id": "abc123", "status": "processing", ...}
 
 # 2. Poll for status (optional)
-curl http://localhost:5000/ocr/job/abc123
+curl https://api.eusdr.com/ocr/job/abc123 \
+  -H "X-Auth-Token: your-api-token-here"
 
 # 3. Get result when ready
-curl http://localhost:5000/ocr/job/abc123/result
+curl https://api.eusdr.com/ocr/job/abc123/result \
+  -H "X-Auth-Token: your-api-token-here"
 
 # Response: {"status": "completed", "text": "...", "lines": [...], ...}
-      "full_text": "PDF content...",
-      "success": true,
-      "file_size": 2048000,
-      "processing_time_seconds": 4.56
-    }
-  ],
-  "summary": {
-    "total_files": 2,
-    "processed_files": 2,
-    "failed_files": 0,
-    "success": true
-  }
-}
+```
+
+#### Hybrid PDF Extraction Flow
+```bash
+# 1. Submit PDF for hybrid extraction
+curl -X POST https://api.eusdr.com/pdf/hybrid-extract \
+  -H "X-Auth-Token: your-api-token-here" \
+  -F "file=@document.pdf" \
+  -F "dpi=300"
+
+# Response: {"job_id": "xyz789", "status": "processing", "total_pages": 150, ...}
+
+# 2. Poll for status (shows progress)
+curl https://api.eusdr.com/pdf/job/xyz789 \
+  -H "X-Auth-Token: your-api-token-here"
+
+# Response: {"status": "processing", "progress": {"pages_processed": 75, "total_pages": 150, ...}}
+
+# 3. Get result when ready
+curl https://api.eusdr.com/pdf/job/xyz789/result \
+  -H "X-Auth-Token: your-api-token-here"
+
+# Response: {"status": "completed", "pages": [...], "full_text": "...", ...}
 ```
 
 ## Client Examples
@@ -489,36 +684,84 @@ curl http://localhost:5000/ocr/job/abc123/result
 ```python
 import requests
 
+API_BASE = "https://api.eusdr.com"  # or http://localhost:5000 for local
+API_TOKEN = "your-api-token-here"
+
+headers = {"X-Auth-Token": API_TOKEN}
+
 # Image OCR
 files = {'file': open('image.jpg', 'rb')}
-response = requests.post('http://localhost:5000/ocr/image', files=files)
+response = requests.post(f'{API_BASE}/ocr/image', files=files, headers=headers)
 result = response.json()
+job_id = result['job_id']
+
+# Get OCR result
+result_response = requests.get(f'{API_BASE}/ocr/job/{job_id}/result', headers=headers)
+ocr_result = result_response.json()
 
 # PDF OCR
 files = {'file': open('document.pdf', 'rb')}
-response = requests.post('http://localhost:5000/ocr/pdf', files=files)
+response = requests.post(f'{API_BASE}/ocr/pdf?dpi=300', files=files, headers=headers)
 result = response.json()
+
+# Hybrid PDF Extraction (recommended for mixed PDFs)
+files = {'file': open('document.pdf', 'rb')}
+data = {'dpi': 300, 'chunk_size': 50}
+response = requests.post(f'{API_BASE}/pdf/hybrid-extract', files=files, data=data, headers=headers)
+result = response.json()
+job_id = result['job_id']
+
+# Get hybrid PDF result
+result_response = requests.get(f'{API_BASE}/pdf/job/{job_id}/result', headers=headers)
+pdf_result = result_response.json()
 
 # Batch processing
 files = [
     ('files', ('image1.jpg', open('image1.jpg', 'rb'), 'image/jpeg')),
     ('files', ('document.pdf', open('document.pdf', 'rb'), 'application/pdf'))
 ]
-response = requests.post('http://localhost:5000/ocr/batch', files=files)
+response = requests.post(f'{API_BASE}/ocr/batch', files=files, headers=headers)
 result = response.json()
 ```
 
 ### cURL Examples
 
 ```bash
+# Set your API token
+export API_TOKEN="your-api-token-here"
+export API_BASE="https://api.eusdr.com"  # or http://localhost:5000 for local
+
+# Health check (no auth required)
+curl $API_BASE/health
+
 # Image OCR
-curl -X POST -F "file=@image.jpg" http://localhost:5000/ocr/image
+curl -X POST \
+  -H "X-Auth-Token: $API_TOKEN" \
+  -F "file=@image.jpg" \
+  $API_BASE/ocr/image
 
 # PDF OCR with custom DPI
-curl -X POST -F "file=@document.pdf" "http://localhost:5000/ocr/pdf?dpi=150"
+curl -X POST \
+  -H "X-Auth-Token: $API_TOKEN" \
+  -F "file=@document.pdf" \
+  "$API_BASE/ocr/pdf?dpi=150"
 
-# Health check
-curl http://localhost:5000/health
+# Hybrid PDF Extraction (recommended)
+curl -X POST \
+  -H "X-Auth-Token: $API_TOKEN" \
+  -F "file=@document.pdf" \
+  -F "dpi=300" \
+  $API_BASE/pdf/hybrid-extract
+
+# Get job status
+curl -X GET \
+  -H "X-Auth-Token: $API_TOKEN" \
+  $API_BASE/ocr/job/{job_id}
+
+# Get job result
+curl -X GET \
+  -H "X-Auth-Token: $API_TOKEN" \
+  $API_BASE/ocr/job/{job_id}/result
 ```
 
 ## Error Handling
