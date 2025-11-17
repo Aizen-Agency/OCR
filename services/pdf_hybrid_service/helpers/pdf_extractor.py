@@ -102,13 +102,13 @@ def extract_page_content(
                     except Exception:
                         pass  # Ignore errors during cleanup
 
-        except Exception as e:
-            logger.error(f"Error extracting content from page {page_index}: {str(e)}")
-            return {
-                "page_index": page_index,
-                "classification": classification,
-                "source": "error",
-                "text": "",
-                "error": str(e)
-            }
+    except Exception as e:
+        logger.error(f"Error extracting content from page {page_index}: {str(e)}")
+        return {
+            "page_index": page_index,
+            "classification": classification,
+            "source": "error",
+            "text": "",
+            "error": str(e)
+        }
 
