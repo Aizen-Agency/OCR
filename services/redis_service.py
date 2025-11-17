@@ -5,6 +5,7 @@ Redis Service - Handles caching and rate limiting operations
 import logging
 import hashlib
 import json
+import time
 from typing import Dict, Any, Optional, Tuple
 import redis
 from config import get_config
@@ -15,6 +16,7 @@ from utils.constants import (
     CACHE_DPI_SUFFIX,
     RATE_LIMIT_WINDOW_SECONDS
 )
+from utils.encoding import mask_redis_url
 
 logger = logging.getLogger(__name__)
 
@@ -37,20 +39,10 @@ class RedisService:
             retry_count: Current retry attempt number
             max_retries: Maximum number of retry attempts
         """
-        import time
         redis_url = self.config.REDIS_URL
         
         # Mask password in logs for security
-        safe_url = redis_url
-        if '@' in redis_url:
-            # Mask password: redis://:password@host -> redis://:***@host
-            parts = redis_url.split('@')
-            if len(parts) == 2:
-                auth_part = parts[0]
-                if ':' in auth_part and auth_part.count(':') >= 2:
-                    # redis://:password -> redis://:***
-                    auth_parts = auth_part.rsplit(':', 1)
-                    safe_url = f"{auth_parts[0]}:***@{parts[1]}"
+        safe_url = mask_redis_url(redis_url)
         
         if retry_count == 0:
             logger.info(f"Attempting to connect to Redis at: {safe_url}")
@@ -282,8 +274,16 @@ class RedisService:
             }
 
         try:
-            # Count OCR cache keys
-            cache_keys = len(self.redis_client.keys(f"{REDIS_KEY_PREFIX_OCR_RESULT}*"))
+            # Count OCR cache keys using SCAN (non-blocking, better performance)
+            # SCAN is preferred over KEYS for production as it doesn't block Redis
+            cache_keys = 0
+            cursor = 0
+            pattern = f"{REDIS_KEY_PREFIX_OCR_RESULT}*"
+            while True:
+                cursor, keys = self.redis_client.scan(cursor, match=pattern, count=100)
+                cache_keys += len(keys)
+                if cursor == 0:
+                    break
             
             # Get Redis info
             info = self.redis_client.info('memory')
@@ -301,3 +301,23 @@ class RedisService:
                 "connected": False,
                 "error": str(e)
             }
+
+    def close(self) -> None:
+        """
+        Close Redis connection and cleanup resources.
+        
+        This should be called when the service is being destroyed
+        to properly release connections.
+        """
+        if self.redis_client is not None:
+            try:
+                self.redis_client.close()
+                logger.info("Redis connection closed")
+            except Exception as e:
+                logger.warning(f"Error closing Redis connection: {str(e)}")
+            finally:
+                self.redis_client = None
+
+    def __del__(self):
+        """Cleanup on object destruction."""
+        self.close()

@@ -7,28 +7,15 @@ import logging
 import time
 from celery import Celery
 from celery.signals import worker_ready, worker_shutting_down
-from kombu import Connection
-from kombu.pools import connections
 import redis
 from redis.exceptions import ResponseError, ConnectionError, AuthenticationError
 from config import get_config
+from utils.encoding import mask_redis_url
 
 logger = logging.getLogger(__name__)
 
 # Get configuration
 config = get_config()
-
-# Mask password in URLs for logging
-def mask_redis_url(url: str) -> str:
-    """Mask password in Redis URL for secure logging."""
-    if '@' in url:
-        parts = url.split('@')
-        if len(parts) == 2:
-            auth_part = parts[0]
-            if ':' in auth_part and auth_part.count(':') >= 2:
-                auth_parts = auth_part.rsplit(':', 1)
-                return f"{auth_parts[0]}:***@{parts[1]}"
-    return url
 
 # Log the actual URLs being used for debugging (with masked password)
 safe_broker_url = mask_redis_url(config.CELERY_BROKER_URL)

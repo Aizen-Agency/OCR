@@ -4,6 +4,7 @@ Health Controller - Handles health check operations
 
 import logging
 from typing import Dict, Any
+from datetime import datetime
 
 from services.ocr_service.ocr_service import OCRService
 
@@ -63,7 +64,6 @@ class HealthController:
 
     def _get_current_timestamp(self) -> str:
         """Get current timestamp in ISO format."""
-        from datetime import datetime
         return datetime.utcnow().isoformat() + "Z"
 
     def _get_detailed_health_info(self, service_health: Dict[str, Any]) -> Dict[str, Any]:

@@ -54,6 +54,7 @@ def create_app(config_name: str = None) -> Flask:
     _register_blueprints(app)
     _register_error_handlers(app)
     _register_rate_limiter(app)
+    _register_cleanup_handlers(app)  # Register cleanup on shutdown
 
     # Log app creation
     logger = logging.getLogger(__name__)
@@ -127,8 +128,14 @@ def _register_services(app: Flask) -> None:
     logger = logging.getLogger(__name__)
 
     try:
-        # Initialize Redis service
+        # Initialize Redis service (gracefully handles connection failures)
+        # RedisService.__init__ should never raise - it only sets redis_client to None on failure
         redis_service = RedisService()
+        if redis_service.is_connected():
+            logger.info("Redis service initialized and connected")
+        else:
+            logger.warning("Redis service initialized but not connected - will work without caching")
+        
         app.redis_service = redis_service
 
         # Initialize Job service
@@ -148,8 +155,11 @@ def _register_services(app: Flask) -> None:
         logger.info("Services initialized successfully")
 
     except Exception as e:
-        logger.error(f"Failed to initialize services: {str(e)}")
-        raise
+        logger.error(f"Failed to initialize critical services: {str(e)}", exc_info=True)
+        # Only raise for critical failures (OCR service)
+        if 'ocr' in str(e).lower():
+            raise
+        logger.warning("Non-critical service initialization failed - continuing anyway")
 
 
 def _register_rate_limiter(app: Flask) -> None:
@@ -165,6 +175,32 @@ def _register_rate_limiter(app: Flask) -> None:
     except Exception as e:
         logger.warning(f"Failed to register rate limiter: {str(e)}")
         # Continue without rate limiting if Redis is unavailable
+
+
+def _register_cleanup_handlers(app: Flask) -> None:
+    """
+    Register cleanup handlers for proper resource cleanup on shutdown.
+
+    Args:
+        app: Flask application instance
+    """
+    @app.teardown_appcontext
+    def cleanup_on_request_end(error):
+        """Cleanup resources at the end of each request context."""
+        # Request-level cleanup if needed
+        pass
+
+    @app.teardown_request
+    def cleanup_on_request(error):
+        """Cleanup resources after each request."""
+        # Request-level cleanup if needed
+        pass
+
+    # Note: For application-level cleanup (on shutdown), we rely on
+    # __del__ methods in service classes, which are called when
+    # Python garbage collects the objects. For explicit cleanup,
+    # you can add signal handlers for SIGTERM/SIGINT if needed.
+    logger.info("Cleanup handlers registered")
 
 
 # Create default app instance for direct execution

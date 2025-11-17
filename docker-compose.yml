@@ -39,8 +39,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "5000:5000"
+    # SECURITY: Port 5000 should NOT be exposed when using nginx (production profile)
+    # IMPORTANT: When using --profile production, nginx handles external access
+    # If running WITHOUT nginx profile, uncomment the port mapping below:
+    # ports:
+    #   - "5000:5000"  # Only uncomment if NOT using nginx (development mode)
     environment:
       - FLASK_ENV=production
       - PORT=5000
@@ -150,13 +153,26 @@ services:
     image: nginx:alpine
     ports:
       - "80:80"
+      # SECURITY: Add HTTPS port when SSL certificates are configured
+      # - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # SECURITY: Add SSL certificates when available
+      # - ./ssl:/etc/nginx/ssl:ro
     depends_on:
       - ocr-microservice
     networks:
       - ocr_network
     restart: unless-stopped
+    # SECURITY: Apply security options to nginx container
+    security_opt:
+      - no-new-privileges:true
+    # SECURITY: Read-only root filesystem (nginx needs /var/cache and /var/run writable)
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
     deploy:
       resources:
         limits:

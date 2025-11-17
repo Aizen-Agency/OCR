@@ -4,6 +4,7 @@ Error Handler Middleware - Centralized error handling for the Flask application
 
 import logging
 from typing import Dict, Any, Optional
+from datetime import datetime
 from flask import Flask, jsonify, current_app, request
 from werkzeug.exceptions import HTTPException
 
@@ -195,7 +196,6 @@ def _handle_error(error: HTTPException, status_code: int, default_message: str) 
 
 def _get_current_timestamp() -> str:
     """Get current timestamp in ISO format."""
-    from datetime import datetime
     return datetime.utcnow().isoformat() + "Z"
 
 

@@ -1,3 +1,4 @@
+# SECURITY: Use specific Python version for reproducibility and security
 # Use Python 3.9 slim image for smaller footprint
 FROM python:3.9-slim
 
@@ -15,8 +16,8 @@ RUN groupadd -r ocruser && \
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for PaddleOCR and OpenCV
-RUN apt-get update && apt-get install -y \
+# SECURITY: Install system dependencies and security updates
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
@@ -24,15 +25,17 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     libgl1 \
     curl \
+    && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
 # Copy requirements first for better Docker layer caching
 COPY requirements.txt .
 
-# Install Python dependencies
+# SECURITY: Install Python dependencies with pinned versions when possible
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    pip cache purge
 
 # Copy application code with proper ownership
 COPY --chown=ocruser:ocruser . .

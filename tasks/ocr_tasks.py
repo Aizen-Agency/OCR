@@ -5,6 +5,8 @@ Celery Tasks for OCR Processing
 import os
 import logging
 import hashlib
+import time
+import traceback
 from typing import Dict, Any
 from celery import Task, signals
 
@@ -21,7 +23,7 @@ os.environ['XDG_CACHE_HOME'] = '/tmp/.cache'
 from celery_app import celery_app
 from services.ocr_service.ocr_service import OCRService
 from services.redis_service import RedisService
-from utils.encoding import decode_base64
+from utils.encoding import decode_base64, generate_file_hash
 from config import get_config
 
 logger = logging.getLogger(__name__)
@@ -154,7 +156,6 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
         Dict containing OCR results
     """
     try:
-        import time
         start_time = time.time()
         logger.info(f"Processing image task: {filename} (Task ID: {self.request.id})")
 
@@ -184,7 +185,8 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
 
         # Generate cache key (works even if Redis is unavailable)
         logger.info(f"Generating cache key for {filename}")
-        file_hash = redis_svc.generate_file_hash(image_data) if redis_svc else hashlib.sha256(image_data).hexdigest()
+        # Use centralized hash function for consistency
+        file_hash = redis_svc.generate_file_hash(image_data) if redis_svc else generate_file_hash(image_data)
         logger.info(f"Cache key generated: {file_hash[:16]}...")
 
         # Process with cache (gracefully handles Redis unavailability)
@@ -212,7 +214,6 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
         return result
 
     except Exception as e:
-        import traceback
         logger.error(f"Error in process_image_task: {str(e)}")
         logger.error(f"Exception type: {type(e).__name__}")
         logger.error(f"Full traceback:\n{traceback.format_exc()}")
@@ -252,7 +253,8 @@ def process_pdf_task(self, pdf_data_b64: str, filename: str = "", dpi: int = 300
         redis_svc = get_redis_service()  # May be None if Redis unavailable
 
         # Generate cache key (with DPI) - works even if Redis is unavailable
-        file_hash = redis_svc.generate_file_hash(pdf_data) if redis_svc else hashlib.sha256(pdf_data).hexdigest()
+        # Use centralized hash function for consistency
+        file_hash = redis_svc.generate_file_hash(pdf_data) if redis_svc else generate_file_hash(pdf_data)
 
         # Process with cache (gracefully handles Redis unavailability)
         if redis_svc and redis_svc.is_connected():
