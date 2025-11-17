@@ -60,6 +60,17 @@ celery_app.conf.update(
         },
         'master_name': 'mymaster',  # For sentinel mode (not used, but helps with resilience)
     },
+    # Result backend connection configuration - ensure Redis connection is maintained
+    # These options are passed to the underlying Redis client to maintain connections
+    result_backend_transport_options={
+        'retry_policy': {
+            'timeout': 5.0
+        },
+        'master_name': 'mymaster',
+        'socket_connect_timeout': 5,
+        'socket_keepalive': True,
+        'health_check_interval': 30,
+    },
     # Handle Redis connection errors gracefully
     task_acks_late=True,  # Acknowledge tasks after completion
     task_reject_on_worker_lost=True,  # Reject tasks if worker is lost
