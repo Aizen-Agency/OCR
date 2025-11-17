@@ -4,6 +4,7 @@ Celery Tasks for OCR Processing
 
 import os
 import logging
+import hashlib
 from typing import Dict, Any
 from celery import Task, signals
 
@@ -107,10 +108,23 @@ def get_ocr_service() -> OCRService:
 
 
 def get_redis_service() -> RedisService:
-    """Get or initialize Redis service."""
+    """Get or initialize Redis service with error handling."""
     global redis_service
     if redis_service is None:
-        redis_service = RedisService()
+        try:
+            redis_service = RedisService()
+        except Exception as e:
+            logger.warning(f"Failed to initialize Redis service: {str(e)}. OCR will work without caching.")
+            redis_service = None
+    
+    # Verify connection is still active
+    if redis_service and not redis_service.is_connected():
+        logger.warning("Redis connection lost, attempting to reconnect...")
+        try:
+            redis_service._connect()
+        except Exception as e:
+            logger.warning(f"Redis reconnection failed: {str(e)}")
+    
     return redis_service
 
 
@@ -168,17 +182,23 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
             )
             logger.info(f"OCR initialized in {time.time() - init_start:.2f}s")
 
-        # Generate cache key
+        # Generate cache key (works even if Redis is unavailable)
         logger.info(f"Generating cache key for {filename}")
-        file_hash = redis_svc.generate_file_hash(image_data)
+        file_hash = redis_svc.generate_file_hash(image_data) if redis_svc else hashlib.sha256(image_data).hexdigest()
         logger.info(f"Cache key generated: {file_hash[:16]}...")
 
-        # Process with cache
+        # Process with cache (gracefully handles Redis unavailability)
         logger.info(f"Calling OCR processing for {filename}")
-        result = _process_ocr_with_cache(
-            ocr_svc, redis_svc, image_data, filename,
-            ocr_svc.process_image, file_hash
-        )
+        if redis_svc and redis_svc.is_connected():
+            result = _process_ocr_with_cache(
+                ocr_svc, redis_svc, image_data, filename,
+                ocr_svc.process_image, file_hash
+            )
+        else:
+            # Process without cache if Redis is unavailable
+            logger.warning("Redis unavailable, processing without cache")
+            result = ocr_svc.process_image(image_data, filename)
+            result['cached'] = False
         logger.info(f"OCR processing completed for {filename}, result success: {result.get('success', False)}")
 
         # Add metadata
@@ -229,16 +249,22 @@ def process_pdf_task(self, pdf_data_b64: str, filename: str = "", dpi: int = 300
 
         # Get services
         ocr_svc = get_ocr_service()
-        redis_svc = get_redis_service()
+        redis_svc = get_redis_service()  # May be None if Redis unavailable
 
-        # Generate cache key (with DPI)
-        file_hash = redis_svc.generate_file_hash(pdf_data)
+        # Generate cache key (with DPI) - works even if Redis is unavailable
+        file_hash = redis_svc.generate_file_hash(pdf_data) if redis_svc else hashlib.sha256(pdf_data).hexdigest()
 
-        # Process with cache (using DPI for cache key)
-        result = _process_ocr_with_cache(
-            ocr_svc, redis_svc, pdf_data, filename,
-            ocr_svc.process_pdf, file_hash, dpi
-        )
+        # Process with cache (gracefully handles Redis unavailability)
+        if redis_svc and redis_svc.is_connected():
+            result = _process_ocr_with_cache(
+                ocr_svc, redis_svc, pdf_data, filename,
+                ocr_svc.process_pdf, file_hash, dpi
+            )
+        else:
+            # Process without cache if Redis is unavailable
+            logger.warning("Redis unavailable, processing without cache")
+            result = ocr_svc.process_pdf(pdf_data, filename, dpi)
+            result['cached'] = False
 
         # Add metadata
         result['job_id'] = self.request.id

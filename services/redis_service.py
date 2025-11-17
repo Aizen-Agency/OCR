@@ -29,10 +29,33 @@ class RedisService:
         self.redis_client: Optional[redis.Redis] = None
         self._connect()
 
-    def _connect(self) -> None:
-        """Initialize Redis connection."""
+    def _connect(self, retry_count: int = 0, max_retries: int = 3) -> None:
+        """
+        Initialize Redis connection with retry logic and exponential backoff.
+        
+        Args:
+            retry_count: Current retry attempt number
+            max_retries: Maximum number of retry attempts
+        """
+        import time
         redis_url = self.config.REDIS_URL
-        logger.info(f"Attempting to connect to Redis at: {redis_url}")
+        
+        # Mask password in logs for security
+        safe_url = redis_url
+        if '@' in redis_url:
+            # Mask password: redis://:password@host -> redis://:***@host
+            parts = redis_url.split('@')
+            if len(parts) == 2:
+                auth_part = parts[0]
+                if ':' in auth_part and auth_part.count(':') >= 2:
+                    # redis://:password -> redis://:***
+                    auth_parts = auth_part.rsplit(':', 1)
+                    safe_url = f"{auth_parts[0]}:***@{parts[1]}"
+        
+        if retry_count == 0:
+            logger.info(f"Attempting to connect to Redis at: {safe_url}")
+        else:
+            logger.info(f"Retrying Redis connection (attempt {retry_count + 1}/{max_retries + 1}): {safe_url}")
         
         try:
             self.redis_client = redis.from_url(
@@ -41,32 +64,92 @@ class RedisService:
                 socket_connect_timeout=5,
                 socket_timeout=5,
                 retry_on_timeout=True,
-                health_check_interval=30
+                health_check_interval=30,
+                socket_keepalive=True,
+                socket_keepalive_options={}
             )
             # Test connection
             self.redis_client.ping()
-            logger.info(f"Redis connected successfully: {redis_url}")
+            logger.info(f"Redis connected successfully: {safe_url}")
         except redis.ConnectionError as e:
-            logger.error(f"Redis connection error: {str(e)}")
-            logger.error(f"  Attempted URL: {redis_url}")
+            if retry_count < max_retries:
+                # Exponential backoff: 1s, 2s, 4s
+                wait_time = 2 ** retry_count
+                logger.warning(f"Redis connection error (retrying in {wait_time}s): {str(e)}")
+                time.sleep(wait_time)
+                return self._connect(retry_count + 1, max_retries)
+            else:
+                logger.error(f"Redis connection error after {max_retries + 1} attempts: {str(e)}")
+                logger.error(f"  Attempted URL: {safe_url}")
+                logger.warning("Redis operations will be disabled. OCR will work without caching.")
+                logger.warning("  Check that Redis service is running and accessible at the configured URL.")
+                self.redis_client = None
+        except redis.AuthenticationError as e:
+            logger.error(f"Redis authentication error: {str(e)}")
+            logger.error(f"  Attempted URL: {safe_url}")
+            logger.error("  Check REDIS_PASSWORD environment variable is set correctly.")
             logger.warning("Redis operations will be disabled. OCR will work without caching.")
-            logger.warning("  Check that Redis service is running and accessible at the configured URL.")
             self.redis_client = None
+        except redis.ResponseError as e:
+            # Handle Redis state changes (master -> replica) gracefully
+            error_msg = str(e).lower()
+            if 'unblocked' in error_msg or 'instance state changed' in error_msg:
+                logger.warning(f"Redis state change detected (will retry): {str(e)}")
+                if retry_count < max_retries:
+                    wait_time = 2 ** retry_count
+                    time.sleep(wait_time)
+                    return self._connect(retry_count + 1, max_retries)
+                else:
+                    logger.error(f"Redis state change persisted after {max_retries + 1} attempts")
+                    self.redis_client = None
+            else:
+                logger.error(f"Redis response error: {str(e)}")
+                self.redis_client = None
         except Exception as e:
-            logger.error(f"Failed to connect to Redis: {str(e)}")
-            logger.error(f"  Attempted URL: {redis_url}")
-            logger.error(f"  Error type: {type(e).__name__}")
-            logger.warning("Redis operations will be disabled. OCR will work without caching.")
-            self.redis_client = None
+            if retry_count < max_retries:
+                wait_time = 2 ** retry_count
+                logger.warning(f"Redis connection failed (retrying in {wait_time}s): {str(e)}")
+                time.sleep(wait_time)
+                return self._connect(retry_count + 1, max_retries)
+            else:
+                logger.error(f"Failed to connect to Redis after {max_retries + 1} attempts: {str(e)}")
+                logger.error(f"  Attempted URL: {safe_url}")
+                logger.error(f"  Error type: {type(e).__name__}")
+                logger.warning("Redis operations will be disabled. OCR will work without caching.")
+                self.redis_client = None
 
     def is_connected(self) -> bool:
-        """Check if Redis is connected."""
+        """Check if Redis is connected and attempt reconnection if needed."""
         if self.redis_client is None:
-            return False
+            # Try to reconnect once
+            self._connect()
+            if self.redis_client is None:
+                return False
+        
         try:
             self.redis_client.ping()
             return True
+        except redis.ResponseError as e:
+            # Handle Redis state changes
+            error_msg = str(e).lower()
+            if 'unblocked' in error_msg or 'instance state changed' in error_msg:
+                logger.warning("Redis state changed, reconnecting...")
+                self._connect()
+                try:
+                    self.redis_client.ping()
+                    return True
+                except Exception:
+                    return False
+            return False
         except Exception:
+            # Try to reconnect once on any other error
+            try:
+                self._connect()
+                if self.redis_client:
+                    self.redis_client.ping()
+                    return True
+            except Exception:
+                pass
             return False
 
     def generate_file_hash(self, file_data: bytes) -> str:

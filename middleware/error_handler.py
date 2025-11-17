@@ -92,9 +92,53 @@ def register_error_handlers(app: Flask) -> None:
         }, 500
 
 
+def _is_attack_pattern(request_path: str, user_agent: Optional[str] = None) -> bool:
+    """
+    Detect common attack patterns to reduce log noise.
+    
+    Args:
+        request_path: The request path
+        user_agent: The user agent string
+        
+    Returns:
+        bool: True if this looks like an attack/scanner pattern
+    """
+    if not request_path:
+        return False
+    
+    # Common scanner/bot patterns
+    attack_patterns = [
+        '/.env', '/.git', '/wp-admin', '/wp-login', '/phpmyadmin',
+        '/admin', '/administrator', '/.well-known', '/.htaccess',
+        '/api/v1', '/api/v2', '/swagger', '/graphql',
+        '/.git/config', '/.svn', '/backup', '/test',
+        '/shell', '/cmd', '/exec', '/eval'
+    ]
+    
+    # Check if path matches attack patterns
+    path_lower = request_path.lower()
+    for pattern in attack_patterns:
+        if pattern in path_lower:
+            return True
+    
+    # Check for suspicious user agents (scanners, bots)
+    if user_agent:
+        ua_lower = user_agent.lower()
+        bot_patterns = [
+            'scanner', 'bot', 'crawler', 'spider', 'nmap', 'masscan',
+            'sqlmap', 'nikto', 'dirb', 'gobuster', 'wfuzz', 'burp',
+            'nessus', 'openvas', 'acunetix', 'netsparker'
+        ]
+        for pattern in bot_patterns:
+            if pattern in ua_lower:
+                return True
+    
+    return False
+
+
 def _handle_error(error: HTTPException, status_code: int, default_message: str) -> tuple[Dict[str, Any], int]:
     """
-    Generic error handler for HTTP exceptions.
+    Generic error handler for HTTP exceptions with intelligent logging.
 
     Args:
         error: The HTTP exception
@@ -104,11 +148,30 @@ def _handle_error(error: HTTPException, status_code: int, default_message: str) 
     Returns:
         tuple: (error_response_dict, status_code)
     """
-    # Log the error
+    # Get request information for attack pattern detection
+    request_path = request.path if request else None
+    user_agent = request.headers.get('User-Agent') if request else None
+    is_attack = _is_attack_pattern(request_path or '', user_agent)
+    
+    # Log the error with appropriate level based on attack pattern
     if status_code >= 500:
         logger.error(f"HTTP {status_code} error: {str(error)}", exc_info=True)
     elif status_code >= 400:
-        logger.warning(f"HTTP {status_code} error: {str(error)}")
+        # Reduce log noise for attack patterns - only log at debug level
+        if is_attack:
+            logger.debug(f"HTTP {status_code} error (attack pattern): {request_path} - {str(error)[:100]}")
+        else:
+            # Only log 404s for legitimate API routes
+            if status_code == 404:
+                # Check if it's a legitimate API route attempt
+                api_routes = ['/ocr', '/health', '/api']
+                is_api_route = any(request_path.startswith(route) for route in api_routes) if request_path else False
+                if is_api_route:
+                    logger.warning(f"HTTP {status_code} error: {request_path} - {str(error)}")
+                else:
+                    logger.debug(f"HTTP {status_code} error (non-API route): {request_path}")
+            else:
+                logger.warning(f"HTTP {status_code} error: {str(error)}")
 
     # Create error response
     response = {

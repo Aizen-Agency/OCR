@@ -1,10 +1,16 @@
 """
-Celery Application Configuration
+Celery Application Configuration with Redis Resilience
 """
 
 import os
 import logging
+import time
 from celery import Celery
+from celery.signals import worker_ready, worker_shutting_down
+from kombu import Connection
+from kombu.pools import connections
+import redis
+from redis.exceptions import ResponseError, ConnectionError, AuthenticationError
 from config import get_config
 
 logger = logging.getLogger(__name__)
@@ -12,9 +18,23 @@ logger = logging.getLogger(__name__)
 # Get configuration
 config = get_config()
 
-# Log the actual URLs being used for debugging
-logger.info(f"Initializing Celery with broker: {config.CELERY_BROKER_URL}")
-logger.info(f"Initializing Celery with backend: {config.CELERY_RESULT_BACKEND}")
+# Mask password in URLs for logging
+def mask_redis_url(url: str) -> str:
+    """Mask password in Redis URL for secure logging."""
+    if '@' in url:
+        parts = url.split('@')
+        if len(parts) == 2:
+            auth_part = parts[0]
+            if ':' in auth_part and auth_part.count(':') >= 2:
+                auth_parts = auth_part.rsplit(':', 1)
+                return f"{auth_parts[0]}:***@{parts[1]}"
+    return url
+
+# Log the actual URLs being used for debugging (with masked password)
+safe_broker_url = mask_redis_url(config.CELERY_BROKER_URL)
+safe_backend_url = mask_redis_url(config.CELERY_RESULT_BACKEND)
+logger.info(f"Initializing Celery with broker: {safe_broker_url}")
+logger.info(f"Initializing Celery with backend: {safe_backend_url}")
 
 # Create Celery app instance
 celery_app = Celery(
@@ -24,7 +44,7 @@ celery_app = Celery(
     include=['tasks.ocr_tasks']
 )
 
-# Celery configuration - explicitly set broker and backend URLs
+# Celery configuration - explicitly set broker and backend URLs with resilience
 celery_app.conf.update(
     broker_url=config.CELERY_BROKER_URL,  # Explicit broker URL
     result_backend=config.CELERY_RESULT_BACKEND,  # Explicit result backend
@@ -43,8 +63,80 @@ celery_app.conf.update(
     broker_connection_retry_on_startup=True,  # Retry connection on startup
     broker_connection_retry=True,  # Enable connection retries
     broker_connection_max_retries=100,  # Maximum retry attempts
+    broker_connection_retry_delay=1.0,  # Initial retry delay
+    broker_pool_limit=10,  # Connection pool limit
+    broker_heartbeat=30,  # Heartbeat interval
+    broker_transport_options={
+        'visibility_timeout': 3600,
+        'retry_policy': {
+            'timeout': 5.0
+        },
+        'master_name': 'mymaster',  # For sentinel mode (not used, but helps with resilience)
+    },
+    # Handle Redis connection errors gracefully
+    task_acks_late=True,  # Acknowledge tasks after completion
+    task_reject_on_worker_lost=True,  # Reject tasks if worker is lost
 )
 
+# Custom connection error handler
+def handle_redis_error(exception, retry_count=0, max_retries=3):
+    """
+    Handle Redis connection errors with retry logic.
+    
+    Args:
+        exception: The exception that occurred
+        retry_count: Current retry attempt
+        max_retries: Maximum number of retries
+        
+    Returns:
+        bool: True if should retry, False otherwise
+    """
+    error_msg = str(exception).lower()
+    
+    # Handle Redis state changes (master -> replica)
+    if isinstance(exception, ResponseError):
+        if 'unblocked' in error_msg or 'instance state changed' in error_msg:
+            if retry_count < max_retries:
+                wait_time = 2 ** retry_count
+                logger.warning(f"Redis state change detected, retrying in {wait_time}s (attempt {retry_count + 1}/{max_retries + 1})")
+                time.sleep(wait_time)
+                return True
+            else:
+                logger.error(f"Redis state change persisted after {max_retries + 1} attempts")
+                return False
+    
+    # Handle connection errors
+    if isinstance(exception, (ConnectionError, AuthenticationError)):
+        if retry_count < max_retries:
+            wait_time = 2 ** retry_count
+            logger.warning(f"Redis connection error, retrying in {wait_time}s (attempt {retry_count + 1}/{max_retries + 1}): {str(exception)}")
+            time.sleep(wait_time)
+            return True
+        else:
+            logger.error(f"Redis connection failed after {max_retries + 1} attempts: {str(exception)}")
+            return False
+    
+    return False
+
+# Signal handlers for worker lifecycle
+@worker_ready.connect
+def worker_ready_handler(sender=None, **kwargs):
+    """Handle worker ready signal - verify Redis connection."""
+    logger.info("Worker ready - verifying Redis connection...")
+    try:
+        # Test broker connection
+        with celery_app.connection() as conn:
+            conn.ensure_connection(max_retries=3)
+        logger.info("Redis broker connection verified")
+    except Exception as e:
+        logger.warning(f"Redis connection check failed (will retry): {str(e)}")
+
+@worker_shutting_down.connect
+def worker_shutting_down_handler(sender=None, **kwargs):
+    """Handle worker shutdown signal."""
+    logger.info("Worker shutting down - cleaning up connections...")
+
 logger.info(f"Celery app configured successfully")
-logger.info(f"  Broker URL: {celery_app.conf.broker_url}")
-logger.info(f"  Result Backend: {celery_app.conf.result_backend}")
+logger.info(f"  Broker URL: {safe_broker_url}")
+logger.info(f"  Result Backend: {safe_backend_url}")
+logger.info("  Redis resilience: Enabled (retry on state changes, connection pooling)")

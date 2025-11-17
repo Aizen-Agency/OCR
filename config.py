@@ -68,12 +68,15 @@ class Config:
 
     # Redis configuration
     # Default to 'redis' service name for Docker compatibility, fallback to 'localhost' for local dev
+    # SECURITY: Redis password is now required - set via REDIS_PASSWORD environment variable
+    REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
     REDIS_URL = os.getenv('REDIS_URL', 'redis://redis:6379/0')
     REDIS_CACHE_TTL = int(os.getenv('REDIS_CACHE_TTL', 3600))  # 1 hour default
 
     # Celery configuration
     # Use explicit env vars first, then fallback to REDIS_URL
     # This allows setting REDIS_URL once and having Celery use it automatically
+    # REDIS_URL should include password: redis://:password@redis:6379/0
     _default_redis_url = os.getenv('REDIS_URL', 'redis://redis:6379/0')
     CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', _default_redis_url)
     CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', _default_redis_url)

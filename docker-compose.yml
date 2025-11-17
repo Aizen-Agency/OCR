@@ -1,19 +1,31 @@
 services:
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # SECURITY: Redis port is NOT exposed to host - only accessible within Docker network
+    # ports:
+    #   - "6379:6379"  # REMOVED - prevents external access
     volumes:
       - redis_data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - ocr_network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
-    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    # SECURITY: Require password authentication and use secure config
+    command: >
+      redis-server /usr/local/etc/redis/redis.conf
+      --requirepass ${REDIS_PASSWORD}
+      --bind 0.0.0.0
+      --protected-mode yes
+      --appendonly yes
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
     deploy:
       resources:
         limits:
@@ -43,7 +55,8 @@ services:
       - MAX_CONTENT_LENGTH=52428800
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
       - LOG_LEVEL=DEBUG
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
       # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL if not set
       - RATE_LIMIT_PER_MINUTE=10
       # Configure PaddlePaddle cache directories explicitly
@@ -91,7 +104,8 @@ services:
       - USE_ANGLE_CLS=true
       - DET_LIMIT_SIDE_LEN=1280
       - REC_BATCH_NUM=8
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
       # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL if not set
       - LOG_LEVEL=DEBUG
       # Configure PaddlePaddle cache directories explicitly

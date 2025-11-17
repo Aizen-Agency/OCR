@@ -39,9 +39,12 @@ paddleocr/
 - **📊 Multi-format Support**: Process images (JPEG, PNG, BMP, TIFF, WebP, GIF) and PDF documents
 - **⚡ High Performance**: Optimized for processing multiple pages with memory management
 - **🔒 Production Ready**: Security headers, rate limiting, health checks, proper logging
+- **🛡️ Security Hardened**: Redis authentication, attack pattern filtering, connection resilience
 - **🐳 Container Ready**: Docker, docker-compose with nginx reverse proxy
 - **📈 Monitoring**: Comprehensive health checks, memory usage tracking, processing metrics
 - **🔄 RESTful API**: Clean REST endpoints with standardized responses
+
+> **🔐 Security**: See [SECURITY.md](SECURITY.md) for production security configuration and best practices.
 
 ## 🏭 Production Practices Applied
 
