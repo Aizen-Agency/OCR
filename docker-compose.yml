@@ -163,8 +163,8 @@ services:
       - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      # SECURITY: Add SSL certificates when available
-      - ./ssl:/etc/nginx/ssl:ro
+      # SECURITY: Mount Let's Encrypt certificates (mount entire directory to preserve symlinks)
+      - /etc/letsencrypt:/etc/letsencrypt:ro
       - logs_data:/var/log/nginx  # Mount logs volume for fail2ban access (nginx writes logs here)
     depends_on:
       - ocr-microservice
