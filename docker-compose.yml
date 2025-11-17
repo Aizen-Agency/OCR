@@ -160,11 +160,11 @@ services:
     ports:
       - "80:80"
       # SECURITY: Add HTTPS port when SSL certificates are configured
-      # - "443:443"
+      - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       # SECURITY: Add SSL certificates when available
-      # - ./ssl:/etc/nginx/ssl:ro
+      - ./ssl:/etc/nginx/ssl:ro
       - logs_data:/var/log/nginx  # Mount logs volume for fail2ban access (nginx writes logs here)
     depends_on:
       - ocr-microservice
