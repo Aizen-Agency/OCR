@@ -91,7 +91,10 @@ def register_rate_limiter(app, redis_service: RedisService) -> None:
             return None
 
         # Skip rate limiting for job status endpoints (read-only)
-        if request.method == 'GET' and request.path.startswith('/ocr/job/'):
+        if request.method == 'GET' and (
+            request.path.startswith('/ocr/job/') or 
+            request.path.startswith('/pdf/job/')
+        ):
             return None
 
         is_allowed, error_response = rate_limiter.check_rate_limit(request)

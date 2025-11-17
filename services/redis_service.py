@@ -11,6 +11,9 @@ from config import get_config
 from utils.constants import (
     REDIS_KEY_PREFIX_OCR_RESULT,
     REDIS_KEY_PREFIX_RATE_LIMIT,
+    REDIS_KEY_PREFIX_PDF_HYBRID_CHUNK,
+    REDIS_KEY_PREFIX_PDF_HYBRID_CHUNKS,
+    REDIS_KEY_PREFIX_PDF_HYBRID_PROGRESS,
     CACHE_KEY_SEPARATOR,
     CACHE_DPI_SUFFIX,
     RATE_LIMIT_WINDOW_SECONDS
@@ -49,6 +52,7 @@ class RedisService:
             logger.info(f"Retrying Redis connection (attempt {retry_count + 1}/{max_retries + 1}): {safe_url}")
         
         try:
+            # Use connection pooling for better performance
             self.redis_client = redis.from_url(
                 redis_url,
                 decode_responses=True,
@@ -57,7 +61,9 @@ class RedisService:
                 retry_on_timeout=True,
                 health_check_interval=30,
                 socket_keepalive=True,
-                socket_keepalive_options={}
+                socket_keepalive_options={},
+                max_connections=50,  # Connection pool size
+                retry_on_error=[redis.ConnectionError, redis.TimeoutError]
             )
             # Test connection
             self.redis_client.ping()
@@ -304,6 +310,188 @@ class RedisService:
                 logger.warning(f"Error closing Redis connection: {str(e)}")
             finally:
                 self.redis_client = None
+
+    def store_chunk_result(self, job_id: str, chunk_id: int, chunk_result: dict) -> bool:
+        """
+        Store a chunk result for hybrid PDF processing.
+
+        Uses Redis pipeline for atomic operations and better performance.
+
+        Args:
+            job_id: Job ID
+            chunk_id: Chunk ID (0-indexed)
+            chunk_result: Chunk result dictionary
+
+        Returns:
+            True if stored successfully, False otherwise
+        """
+        if not self.is_connected():
+            return False
+
+        try:
+            # Use pipeline for atomic operations
+            pipe = self.redis_client.pipeline()
+            
+            # Store chunk result
+            chunk_key = f"{REDIS_KEY_PREFIX_PDF_HYBRID_CHUNK}{job_id}:{chunk_id}"
+            chunk_data = json.dumps(chunk_result)
+            pipe.setex(chunk_key, self.config.REDIS_CACHE_TTL, chunk_data)
+            
+            # Add chunk_id to set for easy retrieval
+            chunks_list_key = f"{REDIS_KEY_PREFIX_PDF_HYBRID_CHUNKS}{job_id}"
+            pipe.sadd(chunks_list_key, chunk_id)
+            pipe.expire(chunks_list_key, self.config.REDIS_CACHE_TTL)
+            
+            # Execute all operations atomically
+            pipe.execute()
+            
+            logger.debug(f"Stored chunk {chunk_id} result for job {job_id}")
+            return True
+        except Exception as e:
+            logger.warning(f"Error storing chunk result: {str(e)}")
+            return False
+
+    def get_chunk_results(self, job_id: str) -> list:
+        """
+        Retrieve all chunk results for a job.
+
+        Args:
+            job_id: Job ID
+
+        Returns:
+            List of chunk result dictionaries, sorted by chunk_id
+        """
+        if not self.is_connected():
+            return []
+
+        try:
+            # Get all chunk IDs from the set
+            chunks_list_key = f"{REDIS_KEY_PREFIX_PDF_HYBRID_CHUNKS}{job_id}"
+            chunk_ids = self.redis_client.smembers(chunks_list_key)
+            
+            if not chunk_ids:
+                return []
+
+            # Retrieve each chunk result
+            chunks = []
+            for chunk_id_str in chunk_ids:
+                try:
+                    chunk_id = int(chunk_id_str)
+                    chunk_key = f"{REDIS_KEY_PREFIX_PDF_HYBRID_CHUNK}{job_id}:{chunk_id}"
+                    chunk_data = self.redis_client.get(chunk_key)
+                    if chunk_data:
+                        chunks.append((chunk_id, json.loads(chunk_data)))
+                except (ValueError, json.JSONDecodeError) as e:
+                    logger.warning(f"Error retrieving chunk {chunk_id_str}: {str(e)}")
+                    continue
+
+            # Sort by chunk_id and return just the results
+            chunks.sort(key=lambda x: x[0])
+            return [chunk_result for _, chunk_result in chunks]
+
+        except Exception as e:
+            logger.warning(f"Error getting chunk results: {str(e)}")
+            return []
+
+    def update_progress(self, job_id: str, pages_processed: int, total_pages: int) -> bool:
+        """
+        Update progress for a hybrid PDF job.
+
+        Args:
+            job_id: Job ID
+            pages_processed: Number of pages processed so far
+            total_pages: Total number of pages
+
+        Returns:
+            True if updated successfully, False otherwise
+        """
+        if not self.is_connected():
+            return False
+
+        try:
+            progress_key = f"{REDIS_KEY_PREFIX_PDF_HYBRID_PROGRESS}{job_id}"
+            progress_data = {
+                "pages_processed": pages_processed,
+                "total_pages": total_pages,
+                "progress_percent": round((pages_processed / total_pages * 100) if total_pages > 0 else 0, 2)
+            }
+            self.redis_client.setex(
+                progress_key,
+                self.config.REDIS_CACHE_TTL,
+                json.dumps(progress_data)
+            )
+            return True
+        except Exception as e:
+            logger.warning(f"Error updating progress: {str(e)}")
+            return False
+
+    def get_progress(self, job_id: str) -> dict:
+        """
+        Get progress information for a hybrid PDF job.
+
+        Args:
+            job_id: Job ID
+
+        Returns:
+            Dictionary with progress information, or empty dict if not found
+        """
+        if not self.is_connected():
+            return {}
+
+        try:
+            progress_key = f"{REDIS_KEY_PREFIX_PDF_HYBRID_PROGRESS}{job_id}"
+            progress_data = self.redis_client.get(progress_key)
+            if progress_data:
+                return json.loads(progress_data)
+            return {}
+        except Exception as e:
+            logger.warning(f"Error getting progress: {str(e)}")
+            return {}
+
+    def cleanup_chunk_data(self, job_id: str) -> bool:
+        """
+        Cleanup chunk data for a completed job.
+
+        Uses Redis pipeline for efficient batch deletion.
+
+        Args:
+            job_id: Job ID
+
+        Returns:
+            True if cleaned successfully, False otherwise
+        """
+        if not self.is_connected():
+            return False
+
+        try:
+            # Get all chunk IDs
+            chunks_list_key = f"{REDIS_KEY_PREFIX_PDF_HYBRID_CHUNKS}{job_id}"
+            chunk_ids = self.redis_client.smembers(chunks_list_key)
+            
+            # Use pipeline for batch deletion
+            if chunk_ids:
+                pipe = self.redis_client.pipeline()
+                
+                # Delete each chunk result
+                for chunk_id_str in chunk_ids:
+                    chunk_key = f"{REDIS_KEY_PREFIX_PDF_HYBRID_CHUNK}{job_id}:{chunk_id_str}"
+                    pipe.delete(chunk_key)
+                
+                # Execute all deletions
+                pipe.execute()
+            
+            # Delete the chunks list and progress (use pipeline for these too)
+            pipe = self.redis_client.pipeline()
+            pipe.delete(chunks_list_key)
+            progress_key = f"{REDIS_KEY_PREFIX_PDF_HYBRID_PROGRESS}{job_id}"
+            pipe.delete(progress_key)
+            pipe.execute()
+            
+            logger.debug(f"Cleaned up chunk data for job {job_id}")
+            return True
+        except Exception as e:
+            logger.warning(f"Error cleaning up chunk data: {str(e)}")
+            return False
 
     def __del__(self):
         """Cleanup on object destruction."""

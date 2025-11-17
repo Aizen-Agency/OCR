@@ -9,6 +9,7 @@ from flask import Flask
 from config import config, get_config
 from routes.ocr import ocr_bp
 from routes.health import health_bp
+from routes.pdf_hybrid import pdf_hybrid_bp
 from middleware.error_handler import register_error_handlers
 from middleware.rate_limiter import register_rate_limiter
 from middleware.auth_middleware import register_auth_middleware
@@ -103,9 +104,10 @@ def _register_blueprints(app: Flask) -> None:
     """
     app.register_blueprint(health_bp)
     app.register_blueprint(ocr_bp)
+    app.register_blueprint(pdf_hybrid_bp)
 
     logger = logging.getLogger(__name__)
-    logger.info("Blueprints registered: health, ocr")
+    logger.info("Blueprints registered: health, ocr, pdf_hybrid")
 
 
 def _register_error_handlers(app: Flask) -> None:

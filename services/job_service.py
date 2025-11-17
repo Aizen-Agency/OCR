@@ -178,3 +178,31 @@ class JobService:
         except Exception as e:
             logger.error(f"Error creating PDF job: {str(e)}")
             raise RuntimeError(f"Failed to create PDF OCR job: {str(e)}")
+
+    def create_hybrid_pdf_job(self, pdf_data: bytes, filename: str, options: dict = None) -> str:
+        """
+        Create an async job for hybrid PDF text extraction.
+
+        Args:
+            pdf_data: Raw PDF bytes
+            filename: Filename for logging
+            options: Processing options (dpi, chunk_size, max_pages, etc.)
+
+        Returns:
+            Job ID (Celery task ID for aggregation task)
+        """
+        try:
+            from services.pdf_hybrid_service import PDFHybridService
+            
+            pdf_hybrid_service = PDFHybridService()
+            job_id = pdf_hybrid_service.create_hybrid_job(
+                pdf_data=pdf_data,
+                filename=filename,
+                options=options or {}
+            )
+            logger.info(f"Created hybrid PDF job: {job_id} for file: {filename}")
+            return job_id
+
+        except Exception as e:
+            logger.error(f"Error creating hybrid PDF job: {str(e)}")
+            raise RuntimeError(f"Failed to create hybrid PDF job: {str(e)}")

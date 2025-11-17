@@ -100,6 +100,8 @@ class Config:
 
     # Rate limiting configuration
     RATE_LIMIT_PER_MINUTE = int(os.getenv('RATE_LIMIT_PER_MINUTE', 10))
+    # Separate rate limit for hybrid PDF endpoint (can be more restrictive)
+    PDF_HYBRID_RATE_LIMIT_PER_MINUTE = int(os.getenv('PDF_HYBRID_RATE_LIMIT_PER_MINUTE', 20))
     
     # API Key Authentication
     # SECURITY: API key required for /ocr/* endpoints (health endpoints excluded)
@@ -109,6 +111,15 @@ class Config:
     if os.getenv('FLASK_ENV', 'development') == 'production' and not AUTH_TOKEN:
         import warnings
         warnings.warn("AUTH_TOKEN not set in production - API authentication is disabled", UserWarning)
+
+    # Hybrid PDF processing settings
+    PDF_HYBRID_MAX_PAGES = int(os.getenv('PDF_HYBRID_MAX_PAGES', 5000))
+    PDF_HYBRID_DEFAULT_DPI = int(os.getenv('PDF_HYBRID_DEFAULT_DPI', 300))
+    PDF_HYBRID_MAX_DPI = int(os.getenv('PDF_HYBRID_MAX_DPI', 600))
+    PDF_HYBRID_DEFAULT_CHUNK_SIZE = int(os.getenv('PDF_HYBRID_DEFAULT_CHUNK_SIZE', 50))
+    PDF_HYBRID_TEMP_DIR = os.getenv('PDF_HYBRID_TEMP_DIR', '/tmp/pdf_hybrid_uploads')
+    PDF_HYBRID_TEXT_THRESHOLD = int(os.getenv('PDF_HYBRID_TEXT_THRESHOLD', 30))
+    PDF_HYBRID_IMAGE_AREA_THRESHOLD = float(os.getenv('PDF_HYBRID_IMAGE_AREA_THRESHOLD', 0.0))
 
     @classmethod
     def to_dict(cls) -> Dict[str, Any]:

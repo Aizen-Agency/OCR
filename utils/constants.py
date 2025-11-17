@@ -35,3 +35,9 @@ MIN_DPI = 72
 MAX_DPI = 600
 DEFAULT_DPI = 300
 
+# Hybrid PDF Constants
+REDIS_KEY_PREFIX_PDF_HYBRID_CHUNK = "pdf_hybrid:chunk:"
+REDIS_KEY_PREFIX_PDF_HYBRID_CHUNKS = "pdf_hybrid:chunks:"
+REDIS_KEY_PREFIX_PDF_HYBRID_PROGRESS = "pdf_hybrid:progress:"
+HYBRID_PDF_JOB_CREATED_MESSAGE = "Hybrid PDF extraction job created successfully. Use GET /pdf/job/{job_id} to check status."
+

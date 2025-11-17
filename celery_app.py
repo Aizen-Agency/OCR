@@ -28,7 +28,7 @@ celery_app = Celery(
     'ocr_tasks',
     broker=config.CELERY_BROKER_URL,
     backend=config.CELERY_RESULT_BACKEND,
-    include=['tasks.ocr_tasks']
+    include=['tasks.ocr_tasks', 'tasks.pdf_hybrid_tasks']
 )
 
 # Celery configuration - explicitly set broker and backend URLs with resilience
