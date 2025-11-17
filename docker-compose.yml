@@ -147,7 +147,7 @@ services:
       - /tmp
 
   # Optional: Add nginx reverse proxy for production
-  # To start nginx, use: docker-compose --profile production up
+  # To start nginx, use: docker compose --profile production up
   # Or remove the 'profiles' section below to always start nginx
   nginx:
     image: nginx:alpine

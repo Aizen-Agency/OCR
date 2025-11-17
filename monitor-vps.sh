@@ -16,9 +16,9 @@ echo ""
 
 # Docker Status
 echo "🐳 Docker Status:"
-if docker-compose ps | grep -q "Up"; then
-    echo "✅ Services: $(docker-compose ps --services --filter "status=running" | wc -l) running"
-    docker-compose ps --services --filter "status=running"
+if docker compose ps | grep -q "Up"; then
+    echo "✅ Services: $(docker compose ps --services --filter "status=running" | wc -l) running"
+    docker compose ps --services --filter "status=running"
 else
     echo "❌ No services running"
 fi
@@ -44,7 +44,7 @@ echo ""
 
 # Recent Logs
 echo "📝 Recent Application Logs:"
-docker-compose logs --tail=5 ocr-microservice 2>/dev/null || echo "No recent logs"
+docker compose logs --tail=5 ocr-microservice 2>/dev/null || echo "No recent logs"
 echo ""
 
 # Network Connections

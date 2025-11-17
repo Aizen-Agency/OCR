@@ -40,7 +40,7 @@ paddleocr/
 - **⚡ High Performance**: Optimized for processing multiple pages with memory management
 - **🔒 Production Ready**: Security headers, rate limiting, health checks, proper logging
 - **🛡️ Security Hardened**: Redis authentication, attack pattern filtering, connection resilience
-- **🐳 Container Ready**: Docker, docker-compose with nginx reverse proxy
+- **🐳 Container Ready**: Docker, docker compose with nginx reverse proxy
 - **📈 Monitoring**: Comprehensive health checks, memory usage tracking, processing metrics
 - **🔄 RESTful API**: Clean REST endpoints with standardized responses
 
@@ -97,10 +97,10 @@ python app.py
 
 ```bash
 # Build and run with Docker Compose
-docker-compose up --build
+docker compose up --build
 
 # For production with nginx reverse proxy
-docker-compose --profile production up --build
+docker compose --profile production up --build
 ```
 
 ### VPS Deployment (8GB RAM)
@@ -113,7 +113,7 @@ Perfect for VPS providers like DigitalOcean, Linode, Vultr, etc.
 
 # Or manual setup
 cp vps-config.env .env
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 **VPS Resource Allocation:**

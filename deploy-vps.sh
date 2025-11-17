@@ -31,7 +31,7 @@ echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] 
 
 # Install Docker
 sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker compose-plugin
 
 # Start and enable Docker
 sudo systemctl start docker
@@ -65,8 +65,8 @@ sudo ufw allow 5000/tcp
 sudo ufw --force enable
 
 echo "🚀 Starting OCR server..."
-# docker-compose up -d --build
-docker-compose --profile production up -d --build
+# docker compose up -d --build
+docker compose --profile production up -d --build
 
 echo ""
 echo "✅ Deployment completed!"
@@ -77,10 +77,10 @@ echo "  - Health Check: http://your-vps-ip:5000/health"
 echo "  - Ready Check: http://your-vps-ip:5000/health/ready"
 echo ""
 echo "📊 Monitoring commands:"
-echo "  - View logs: docker-compose logs -f"
-echo "  - Check status: docker-compose ps"
-echo "  - Restart: docker-compose restart"
-echo "  - Stop: docker-compose down"
+echo "  - View logs: docker compose logs -f"
+echo "  - Check status: docker compose ps"
+echo "  - Restart: docker compose restart"
+echo "  - Stop: docker compose down"
 echo ""
 echo "⚠️  Remember to:"
 echo "  1. Update SECRET_KEY in .env"
