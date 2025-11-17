@@ -134,6 +134,32 @@ def worker_shutting_down_handler(sender=None, **kwargs):
     """Handle worker shutdown signal."""
     logger.info("Worker shutting down - cleaning up connections...")
 
+# Ensure result backend connection is established and maintained
+def ensure_result_backend_connection():
+    """Ensure Celery result backend connection is established."""
+    try:
+        backend = celery_app.backend
+        if hasattr(backend, 'client'):
+            # Force connection establishment by pinging
+            backend.client.ping()
+            logger.debug("Result backend connection verified")
+            return True
+    except Exception as e:
+        logger.warning(f"Result backend connection check failed: {str(e)}")
+        # Try to reconnect by resetting the connection pool
+        try:
+            if hasattr(backend, 'client') and hasattr(backend.client, 'connection_pool'):
+                backend.client.connection_pool.disconnect()
+                # Force a new connection
+                backend.client.connection_pool.reset()
+        except Exception as reset_error:
+            logger.debug(f"Connection pool reset failed: {str(reset_error)}")
+        return False
+    return False
+
+# Note: Connection errors are now handled in JobService._ensure_backend_connection()
+# which is called before creating tasks. This ensures the connection is alive when needed.
+
 logger.info(f"Celery app configured successfully")
 logger.info(f"  Broker URL: {safe_broker_url}")
 logger.info(f"  Result Backend: {safe_backend_url}")

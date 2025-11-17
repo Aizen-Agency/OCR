@@ -216,6 +216,28 @@ def _register_cleanup_handlers(app: Flask) -> None:
         # Request-level cleanup if needed
         pass
 
+    # Ensure Celery result backend connection is established when Flask is ready
+    # Use a thread to establish connection after Flask starts
+    import threading
+    def ensure_celery_backend_connection():
+        """Ensure Celery result backend connection is established when Flask starts."""
+        import time
+        time.sleep(3)  # Wait for Flask to fully start
+        try:
+            from celery_app import celery_app
+            backend = celery_app.backend
+            if hasattr(backend, 'client'):
+                # Force connection establishment
+                backend.client.ping()
+                logger.info("Celery result backend connection established")
+        except Exception as e:
+            logger.warning(f"Failed to establish Celery result backend connection: {str(e)}")
+            # Connection will be retried automatically when needed
+    
+    # Start connection establishment in background thread
+    _backend_thread = threading.Thread(target=ensure_celery_backend_connection, daemon=True)
+    _backend_thread.start()
+
     # Note: For application-level cleanup (on shutdown), we rely on
     # __del__ methods in service classes, which are called when
     # Python garbage collects the objects. For explicit cleanup,

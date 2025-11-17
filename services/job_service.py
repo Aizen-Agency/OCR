@@ -20,6 +20,24 @@ class JobService:
 
     def __init__(self):
         self.celery_app = celery_app
+    
+    def _ensure_backend_connection(self):
+        """Ensure Celery result backend connection is established."""
+        try:
+            backend = self.celery_app.backend
+            if hasattr(backend, 'client'):
+                # Ping to ensure connection is alive
+                backend.client.ping()
+        except Exception as e:
+            logger.warning(f"Result backend connection check failed, will retry: {str(e)}")
+            # Try to reset connection pool and reconnect
+            try:
+                if hasattr(backend, 'client') and hasattr(backend.client, 'connection_pool'):
+                    backend.client.connection_pool.disconnect()
+                    backend.client.connection_pool.reset()
+            except:
+                pass
+            # Connection will be retried when task is created
 
     def get_job_status(self, job_id: str) -> Dict[str, Any]:
         """
@@ -148,6 +166,9 @@ class JobService:
             Job ID (Celery task ID)
         """
         try:
+            # Ensure result backend connection is established before creating task
+            self._ensure_backend_connection()
+            
             image_data_b64 = encode_base64(image_data)
             task = process_image_task.delay(image_data_b64, filename)
             logger.info(f"Created image OCR job: {task.id} for file: {filename}")
@@ -170,6 +191,9 @@ class JobService:
             Job ID (Celery task ID)
         """
         try:
+            # Ensure result backend connection is established before creating task
+            self._ensure_backend_connection()
+            
             pdf_data_b64 = encode_base64(pdf_data)
             task = process_pdf_task.delay(pdf_data_b64, filename, dpi)
             logger.info(f"Created PDF OCR job: {task.id} for file: {filename} at {dpi} DPI")
@@ -192,6 +216,9 @@ class JobService:
             Job ID (Celery task ID for aggregation task)
         """
         try:
+            # Ensure result backend connection is established before creating task
+            self._ensure_backend_connection()
+            
             from services.pdf_hybrid_service import PDFHybridService
             
             pdf_hybrid_service = PDFHybridService()
