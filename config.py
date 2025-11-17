@@ -3,6 +3,7 @@ Configuration settings for the OCR microservice
 """
 
 import os
+from urllib.parse import quote_plus
 from typing import Dict, Any
 
 
@@ -70,16 +71,32 @@ class Config:
     # Default to 'redis' service name for Docker compatibility, fallback to 'localhost' for local dev
     # SECURITY: Redis password is now required - set via REDIS_PASSWORD environment variable
     REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
-    REDIS_URL = os.getenv('REDIS_URL', 'redis://redis:6379/0')
+    
+    # Build REDIS_URL with proper URL encoding for password
+    # If REDIS_URL is explicitly set, use it; otherwise construct from REDIS_PASSWORD
+    # This handles special characters in password (like / and =) by URL-encoding them
+    _redis_url_env = os.getenv('REDIS_URL', '')
+    if _redis_url_env:
+        # Use explicitly set REDIS_URL (should already have URL-encoded password if needed)
+        REDIS_URL = _redis_url_env
+    elif REDIS_PASSWORD:
+        # Construct URL with URL-encoded password (handles special characters like / and =)
+        # quote_plus encodes: / -> %2F, = -> %3D, etc.
+        encoded_password = quote_plus(REDIS_PASSWORD)
+        REDIS_URL = f'redis://:{encoded_password}@redis:6379/0'
+    else:
+        # No password - insecure but allows local dev
+        REDIS_URL = 'redis://redis:6379/0'
+    
     REDIS_CACHE_TTL = int(os.getenv('REDIS_CACHE_TTL', 3600))  # 1 hour default
 
     # Celery configuration
     # Use explicit env vars first, then fallback to REDIS_URL
     # This allows setting REDIS_URL once and having Celery use it automatically
     # REDIS_URL should include password: redis://:password@redis:6379/0
-    _default_redis_url = os.getenv('REDIS_URL', 'redis://redis:6379/0')
-    CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', _default_redis_url)
-    CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', _default_redis_url)
+    # Password will be automatically URL-encoded if special characters are present
+    CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', REDIS_URL)
+    CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', REDIS_URL)
 
     # Rate limiting configuration
     RATE_LIMIT_PER_MINUTE = int(os.getenv('RATE_LIMIT_PER_MINUTE', 10))

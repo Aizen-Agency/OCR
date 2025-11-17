@@ -58,9 +58,10 @@ services:
       - MAX_CONTENT_LENGTH=52428800
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
       - LOG_LEVEL=DEBUG
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      # REDIS_URL will be constructed in Python with proper URL encoding for special characters
+      # Do NOT set REDIS_URL here - let config.py handle URL encoding of password
       - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
-      # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL if not set
+      # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL from config.py
       - RATE_LIMIT_PER_MINUTE=10
       # Configure PaddlePaddle cache directories explicitly
       - XDG_CACHE_HOME=/tmp/.cache
@@ -107,9 +108,10 @@ services:
       - USE_ANGLE_CLS=true
       - DET_LIMIT_SIDE_LEN=1280
       - REC_BATCH_NUM=8
-      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      # REDIS_URL will be constructed in Python with proper URL encoding for special characters
+      # Do NOT set REDIS_URL here - let config.py handle URL encoding of password
       - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
-      # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL if not set
+      # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL from config.py
       - LOG_LEVEL=DEBUG
       # Configure PaddlePaddle cache directories explicitly
       - XDG_CACHE_HOME=/tmp/.cache
