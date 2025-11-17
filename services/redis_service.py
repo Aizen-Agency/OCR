@@ -3,7 +3,6 @@ Redis Service - Handles caching and rate limiting operations
 """
 
 import logging
-import hashlib
 import json
 import time
 from typing import Dict, Any, Optional, Tuple
@@ -16,7 +15,7 @@ from utils.constants import (
     CACHE_DPI_SUFFIX,
     RATE_LIMIT_WINDOW_SECONDS
 )
-from utils.encoding import mask_redis_url
+from utils.encoding import mask_redis_url, generate_file_hash
 
 logger = logging.getLogger(__name__)
 
@@ -143,18 +142,6 @@ class RedisService:
             except Exception:
                 pass
             return False
-
-    def generate_file_hash(self, file_data: bytes) -> str:
-        """
-        Generate SHA256 hash for file data.
-
-        Args:
-            file_data: Raw file bytes
-
-        Returns:
-            SHA256 hash string
-        """
-        return hashlib.sha256(file_data).hexdigest()
 
     def _build_cache_key(self, file_hash: str, dpi: Optional[int] = None) -> str:
         """

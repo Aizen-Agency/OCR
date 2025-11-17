@@ -38,7 +38,7 @@ paddleocr/
 - **🔧 Application Factory**: Proper Flask app initialization with dependency injection
 - **📊 Multi-format Support**: Process images (JPEG, PNG, BMP, TIFF, WebP, GIF) and PDF documents
 - **⚡ High Performance**: Optimized for processing multiple pages with memory management
-- **🔒 Production Ready**: Security headers, rate limiting, health checks, proper logging
+- **🔒 Production Ready**: Security headers, rate limiting, API key authentication, Fail2ban protection, health checks, proper logging
 - **🛡️ Security Hardened**: Redis authentication, attack pattern filtering, connection resilience
 - **🐳 Container Ready**: Docker, docker compose with nginx reverse proxy
 - **📈 Monitoring**: Comprehensive health checks, memory usage tracking, processing metrics
@@ -60,6 +60,8 @@ paddleocr/
 - **Error handling**: Centralized error responses with proper HTTP codes
 - **Health checks**: Kubernetes-ready liveness/readiness probes
 - **Rate limiting**: Redis-based distributed rate limiting
+- **API Key Authentication**: X-Auth-Token header required for all `/ocr/*` endpoints
+- **Fail2ban Protection**: Automatic IP banning for authentication failures and rate limit violations
 
 ### **Performance & Monitoring**
 - **Memory management**: Automatic garbage collection after requests
@@ -226,9 +228,12 @@ All OCR endpoints use asynchronous processing with Celery. You'll receive a `job
 ```http
 POST /ocr/image
 Content-Type: multipart/form-data
+X-Auth-Token: your-api-token-here
 
 file: <image_file>
 ```
+
+**Note:** All `/ocr/*` endpoints require the `X-Auth-Token` header. Health endpoints (`/health/*`) do not require authentication.
 
 **Response (202 Accepted):**
 ```json
@@ -245,6 +250,7 @@ file: <image_file>
 ```http
 POST /ocr/pdf?dpi=300
 Content-Type: multipart/form-data
+X-Auth-Token: your-api-token-here
 
 file: <pdf_file>
 ```
@@ -386,6 +392,27 @@ GET /ocr/job/{job_id}/result
 }
 ```
 
+### API Key Authentication
+
+All `/ocr/*` endpoints require API key authentication via the `X-Auth-Token` header. Health check endpoints (`/health/*`) are excluded for monitoring purposes.
+
+**Set the API token:**
+```bash
+export AUTH_TOKEN="your-api-token-here"
+```
+
+**Example request:**
+```bash
+curl -X POST http://your-server/ocr/image \
+  -H "X-Auth-Token: your-api-token-here" \
+  -F "file=@image.jpg"
+```
+
+**Error responses:**
+- **401 Unauthorized**: Missing or invalid `X-Auth-Token` header
+
+See [SECURITY.md](SECURITY.md) for detailed authentication configuration.
+
 ### Rate Limiting
 
 The API implements rate limiting using Redis. Default limit: **10 requests per minute per IP address**.
@@ -393,6 +420,18 @@ The API implements rate limiting using Redis. Default limit: **10 requests per m
 **Rate Limit Headers:**
 - `X-RateLimit-Limit`: Maximum requests allowed per minute
 - `X-RateLimit-Remaining`: Remaining requests in current window
+
+### Fail2ban Protection
+
+Fail2ban automatically bans IP addresses that show malicious behavior:
+- **Authentication failures**: Bans IPs after 5 failed authentication attempts (401/403)
+- **Rate limit violations**: Bans IPs after 10 rate limit violations (429)
+
+Ban durations:
+- Authentication failures: 1 hour
+- Rate limit violations: 30 minutes
+
+See `fail2ban/README.md` for management commands.
 
 **Rate Limit Exceeded (429 Too Many Requests):**
 ```json

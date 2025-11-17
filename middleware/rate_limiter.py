@@ -6,6 +6,7 @@ import logging
 from typing import Optional, Tuple, Dict, Any
 from flask import request, jsonify, current_app
 from services.redis_service import RedisService
+from utils.request_utils import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +35,7 @@ class RateLimiter:
             return f"api_key:{api_key}"
 
         # Fall back to IP address
-        # Handle proxy headers
-        if request.headers.get('X-Forwarded-For'):
-            ip = request.headers.get('X-Forwarded-For').split(',')[0].strip()
-        elif request.headers.get('X-Real-IP'):
-            ip = request.headers.get('X-Real-IP')
-        else:
-            ip = request.remote_addr
-
+        ip = get_client_ip()
         return f"ip:{ip}"
 
     def check_rate_limit(self, request) -> Tuple[bool, Optional[Dict[str, Any]]]:

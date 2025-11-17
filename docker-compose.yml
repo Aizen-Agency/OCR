@@ -63,6 +63,8 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
       # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL from config.py
       - RATE_LIMIT_PER_MINUTE=10
+      # SECURITY: API key authentication - required for /ocr/* endpoints
+      - AUTH_TOKEN=${AUTH_TOKEN:-1QHRD48KoetalQhxg14KwMe1MKjRw7Mbj9BwlBUm74M=}
       # Configure PaddlePaddle cache directories explicitly
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
@@ -113,6 +115,8 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
       # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will automatically use REDIS_URL from config.py
       - LOG_LEVEL=DEBUG
+      # SECURITY: API key authentication - required for /ocr/* endpoints
+      - AUTH_TOKEN=${AUTH_TOKEN:-1QHRD48KoetalQhxg14KwMe1MKjRw7Mbj9BwlBUm74M=}
       # Configure PaddlePaddle cache directories explicitly
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
@@ -161,6 +165,7 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       # SECURITY: Add SSL certificates when available
       # - ./ssl:/etc/nginx/ssl:ro
+      - logs_data:/var/log/nginx  # Mount logs volume for fail2ban access (nginx writes logs here)
     depends_on:
       - ocr-microservice
     networks:
@@ -186,6 +191,25 @@ services:
     profiles:
       - production
 
+  fail2ban:
+    image: crazymax/fail2ban:latest
+    container_name: ocr-fail2ban-1
+    network_mode: "host"  # Required for iptables to work properly
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    volumes:
+      - ./fail2ban/jail.local:/etc/fail2ban/jail.d/jail.local:ro
+      - ./fail2ban/nginx-auth.conf:/etc/fail2ban/filter.d/nginx-auth.conf:ro
+      - ./fail2ban/nginx-limit-req.conf:/etc/fail2ban/filter.d/nginx-limit-req.conf:ro
+      - logs_data:/var/log/nginx:ro  # Mount nginx logs from logs_data volume
+      - fail2ban_data:/data
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    profiles:
+      - production
+
 volumes:
   ocr_uploads:
     driver: local
@@ -194,6 +218,8 @@ volumes:
   logs_data:
     driver: local
   paddlex_models:
+    driver: local
+  fail2ban_data:
     driver: local
 
 networks:

@@ -11,6 +11,7 @@ from routes.ocr import ocr_bp
 from routes.health import health_bp
 from middleware.error_handler import register_error_handlers
 from middleware.rate_limiter import register_rate_limiter
+from middleware.auth_middleware import register_auth_middleware
 from services.ocr_service.ocr_service import OCRService
 from services.redis_service import RedisService
 from services.job_service import JobService
@@ -42,6 +43,7 @@ def create_app(config_name: str = None) -> Flask:
     app.config['SECRET_KEY'] = app_config.SECRET_KEY
     app.config['MAX_CONTENT_LENGTH'] = app_config.MAX_CONTENT_LENGTH
     app.config['UPLOAD_FOLDER'] = app_config.UPLOAD_FOLDER
+    app.config['AUTH_TOKEN'] = app_config.AUTH_TOKEN  # Store AUTH_TOKEN in app config for middleware access
 
     # Set up logging
     _setup_logging(app, app_config)
@@ -53,6 +55,7 @@ def create_app(config_name: str = None) -> Flask:
     _register_services(app)  # Must be first to initialize Redis/Celery
     _register_blueprints(app)
     _register_error_handlers(app)
+    _register_auth_middleware(app)  # Register API key authentication
     _register_rate_limiter(app)
     _register_cleanup_handlers(app)  # Register cleanup on shutdown
 
@@ -160,6 +163,21 @@ def _register_services(app: Flask) -> None:
         if 'ocr' in str(e).lower():
             raise
         logger.warning("Non-critical service initialization failed - continuing anyway")
+
+
+def _register_auth_middleware(app: Flask) -> None:
+    """
+    Register API key authentication middleware.
+
+    Args:
+        app: Flask application instance
+    """
+    try:
+        register_auth_middleware(app)
+        logger.info("API key authentication middleware registered")
+    except Exception as e:
+        logger.warning(f"Failed to register auth middleware: {str(e)}")
+        # Continue without authentication if there's an error
 
 
 def _register_rate_limiter(app: Flask) -> None:

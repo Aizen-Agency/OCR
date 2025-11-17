@@ -4,7 +4,6 @@ Celery Tasks for OCR Processing
 
 import os
 import logging
-import hashlib
 import time
 import traceback
 from typing import Dict, Any
@@ -186,7 +185,7 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
         # Generate cache key (works even if Redis is unavailable)
         logger.info(f"Generating cache key for {filename}")
         # Use centralized hash function for consistency
-        file_hash = redis_svc.generate_file_hash(image_data) if redis_svc else generate_file_hash(image_data)
+        file_hash = generate_file_hash(image_data)
         logger.info(f"Cache key generated: {file_hash[:16]}...")
 
         # Process with cache (gracefully handles Redis unavailability)
@@ -254,7 +253,7 @@ def process_pdf_task(self, pdf_data_b64: str, filename: str = "", dpi: int = 300
 
         # Generate cache key (with DPI) - works even if Redis is unavailable
         # Use centralized hash function for consistency
-        file_hash = redis_svc.generate_file_hash(pdf_data) if redis_svc else generate_file_hash(pdf_data)
+        file_hash = generate_file_hash(pdf_data)
 
         # Process with cache (gracefully handles Redis unavailability)
         if redis_svc and redis_svc.is_connected():

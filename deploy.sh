@@ -23,6 +23,12 @@ if [ -z "$REDIS_PASSWORD" ]; then
     export REDIS_PASSWORD="${REDIS_PASSWORD:-change-this-redis-password-in-production}"
 fi
 
+# Check if AUTH_TOKEN is set
+if [ -z "$AUTH_TOKEN" ]; then
+    echo -e "${YELLOW}Warning: AUTH_TOKEN not set. Using default token.${NC}"
+    export AUTH_TOKEN="${AUTH_TOKEN:-1QHRD48KoetalQhxg14KwMe1MKjRw7Mbj9BwlBUm74M=}"
+fi
+
 # Verify docker compose is available
 if ! command -v docker &> /dev/null || ! docker compose version &> /dev/null 2>&1; then
     echo -e "${RED}Error: docker compose not found${NC}"
@@ -64,8 +70,8 @@ echo "Removing dangling images..."
 docker image prune -f || true
 
 # Remove unused volumes (be careful - this removes all unused volumes)
-echo "Removing unused volumes (except redis_data)..."
-docker volume ls -q 2>/dev/null | grep -v redis_data | while read -r vol; do
+echo "Removing unused volumes (except redis_data and fail2ban_data)..."
+docker volume ls -q 2>/dev/null | grep -vE "redis_data|fail2ban_data" | while read -r vol; do
     [ -n "$vol" ] && docker volume rm "$vol" 2>/dev/null || true
 done
 
@@ -111,11 +117,27 @@ else
     echo "   Check logs: docker compose --profile production logs ocr-microservice"
 fi
 
+# Check Fail2ban status if running
+echo "Checking Fail2ban status..."
+if docker compose --profile production ps fail2ban 2>/dev/null | grep -q "Up"; then
+    echo -e "${GREEN}✓ Fail2ban is running${NC}"
+    echo "   Check banned IPs: docker exec ocr-fail2ban-1 fail2ban-client status nginx-auth"
+else
+    echo -e "${YELLOW}⚠ Fail2ban not running (check if it's in production profile)${NC}"
+fi
+
 echo ""
 echo -e "${GREEN}Step 8: Viewing logs${NC}"
 echo "----------------------------------------"
 echo "Recent logs (last 20 lines):"
 docker compose --profile production logs --tail=20
+
+# Get server IP address
+SERVER_IP=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "YOUR_SERVER_IP")
+if [ -z "$SERVER_IP" ] || [ "$SERVER_IP" = "YOUR_SERVER_IP" ]; then
+    # Try alternative method
+    SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s icanhazip.com 2>/dev/null || echo "YOUR_SERVER_IP")
+fi
 
 echo ""
 echo "=========================================="
@@ -128,8 +150,36 @@ echo "  Check status:     docker compose --profile production ps"
 echo "  Stop services:    docker compose --profile production down"
 echo "  Restart service:  docker compose --profile production restart <service-name>"
 echo ""
-echo "Service URLs:"
+echo "Security commands:"
+echo "  Check Fail2ban:   docker exec ocr-fail2ban-1 fail2ban-client status nginx-auth"
+echo "  View banned IPs: docker exec ocr-fail2ban-1 fail2ban-client status nginx-auth | grep 'Banned IP'"
+echo "  Unban IP:         docker exec ocr-fail2ban-1 fail2ban-client set nginx-auth unbanip <IP>"
+echo ""
+echo "Service URLs (from server):"
 echo "  Health check:     http://localhost/health/ready"
 echo "  OCR endpoint:     http://localhost/ocr/image"
+echo ""
+if [ "$SERVER_IP" != "YOUR_SERVER_IP" ]; then
+    echo -e "${GREEN}Service URLs (from external):${NC}"
+    echo "  Health check:     http://${SERVER_IP}/health/ready"
+    echo "  OCR endpoint:     http://${SERVER_IP}/ocr/image"
+    echo ""
+    echo -e "${YELLOW}⚠ IMPORTANT: OCR endpoints require X-Auth-Token header${NC}"
+    echo "  Example: curl -X POST http://${SERVER_IP}/ocr/image \\"
+    echo "    -H \"X-Auth-Token: ${AUTH_TOKEN}\" \\"
+    echo "    -F \"file=@image.jpg\""
+    echo ""
+else
+    echo -e "${YELLOW}Service URLs (from external):${NC}"
+    echo "  Health check:     http://YOUR_SERVER_IP/health/ready"
+    echo "  OCR endpoint:     http://YOUR_SERVER_IP/ocr/image"
+    echo ""
+    echo -e "${YELLOW}⚠ IMPORTANT: OCR endpoints require X-Auth-Token header${NC}"
+    echo "  Example: curl -X POST http://YOUR_SERVER_IP/ocr/image \\"
+    echo "    -H \"X-Auth-Token: ${AUTH_TOKEN}\" \\"
+    echo "    -F \"file=@image.jpg\""
+    echo ""
+    echo -e "${YELLOW}To find your server IP, run: hostname -I or curl ifconfig.me${NC}"
+fi
 echo ""
 

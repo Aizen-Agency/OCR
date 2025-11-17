@@ -100,6 +100,15 @@ class Config:
 
     # Rate limiting configuration
     RATE_LIMIT_PER_MINUTE = int(os.getenv('RATE_LIMIT_PER_MINUTE', 10))
+    
+    # API Key Authentication
+    # SECURITY: API key required for /ocr/* endpoints (health endpoints excluded)
+    AUTH_TOKEN = os.getenv('AUTH_TOKEN', '')
+    
+    # Warn if AUTH_TOKEN is not set in production
+    if os.getenv('FLASK_ENV', 'development') == 'production' and not AUTH_TOKEN:
+        import warnings
+        warnings.warn("AUTH_TOKEN not set in production - API authentication is disabled", UserWarning)
 
     @classmethod
     def to_dict(cls) -> Dict[str, Any]:
