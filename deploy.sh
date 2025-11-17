@@ -23,23 +23,19 @@ if [ -z "$REDIS_PASSWORD" ]; then
     export REDIS_PASSWORD="${REDIS_PASSWORD:-change-this-redis-password-in-production}"
 fi
 
-# Detect docker compose command (try V2 first, fallback to V1)
-if command -v docker &> /dev/null && docker compose version &> /dev/null 2>&1; then
-    DOCKER_COMPOSE="docker compose"
-    echo "Using Docker Compose V2 (docker compose)"
-elif command -v docker-compose &> /dev/null; then
-    DOCKER_COMPOSE="docker-compose"
-    echo "Using Docker Compose V1 (docker-compose)"
-else
-    echo -e "${RED}Error: docker compose or docker-compose not found${NC}"
-    echo "Please install Docker Compose: https://docs.docker.com/compose/install/"
+# Verify docker compose is available
+if ! command -v docker &> /dev/null || ! docker compose version &> /dev/null 2>&1; then
+    echo -e "${RED}Error: docker compose not found${NC}"
+    echo "Please ensure Docker is installed and docker compose is available"
     exit 1
 fi
+
+echo "Using Docker Compose: docker compose"
 
 echo ""
 echo -e "${GREEN}Step 1: Stopping existing containers${NC}"
 echo "----------------------------------------"
-$DOCKER_COMPOSE --profile production down || true
+docker compose --profile production down || true
 echo "✓ Containers stopped"
 
 echo ""
@@ -48,7 +44,7 @@ echo "----------------------------------------"
 
 # Remove old containers (if any)
 echo "Removing old containers..."
-$DOCKER_COMPOSE --profile production rm -f || true
+docker compose --profile production rm -f || true
 
 # Remove old images (keeps space)
 echo "Removing old OCR service images..."
@@ -81,13 +77,13 @@ echo "✓ Cleanup completed"
 echo ""
 echo -e "${GREEN}Step 3: Building fresh images${NC}"
 echo "----------------------------------------"
-$DOCKER_COMPOSE --profile production build --no-cache
+docker compose --profile production build --no-cache
 echo "✓ Images built successfully"
 
 echo ""
 echo -e "${GREEN}Step 4: Starting services${NC}"
 echo "----------------------------------------"
-$DOCKER_COMPOSE --profile production up -d
+docker compose --profile production up -d
 echo "✓ Services started"
 
 echo ""
@@ -98,7 +94,7 @@ sleep 10
 echo ""
 echo -e "${GREEN}Step 6: Checking service status${NC}"
 echo "----------------------------------------"
-$DOCKER_COMPOSE --profile production ps
+docker compose --profile production ps
 
 echo ""
 echo -e "${GREEN}Step 7: Checking service health${NC}"
@@ -112,14 +108,14 @@ if curl -f http://localhost/health/ready > /dev/null 2>&1; then
     echo -e "${GREEN}✓ OCR service is healthy${NC}"
 else
     echo -e "${YELLOW}⚠ OCR service not ready yet (this is normal on first startup)${NC}"
-    echo "   Check logs: $DOCKER_COMPOSE --profile production logs ocr-microservice"
+    echo "   Check logs: docker compose --profile production logs ocr-microservice"
 fi
 
 echo ""
 echo -e "${GREEN}Step 8: Viewing logs${NC}"
 echo "----------------------------------------"
 echo "Recent logs (last 20 lines):"
-$DOCKER_COMPOSE --profile production logs --tail=20
+docker compose --profile production logs --tail=20
 
 echo ""
 echo "=========================================="
@@ -127,10 +123,10 @@ echo -e "${GREEN}Deployment Complete!${NC}"
 echo "=========================================="
 echo ""
 echo "Useful commands:"
-echo "  View logs:        $DOCKER_COMPOSE --profile production logs -f"
-echo "  Check status:     $DOCKER_COMPOSE --profile production ps"
-echo "  Stop services:    $DOCKER_COMPOSE --profile production down"
-echo "  Restart service:  $DOCKER_COMPOSE --profile production restart <service-name>"
+echo "  View logs:        docker compose --profile production logs -f"
+echo "  Check status:     docker compose --profile production ps"
+echo "  Stop services:    docker compose --profile production down"
+echo "  Restart service:  docker compose --profile production restart <service-name>"
 echo ""
 echo "Service URLs:"
 echo "  Health check:     http://localhost/health/ready"
