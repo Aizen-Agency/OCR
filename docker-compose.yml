@@ -1,39 +1,42 @@
 services:
-  redis:
-    image: redis:7-alpine
-    # SECURITY: Redis port is NOT exposed to host - only accessible within Docker network
-    # ports:
-    #   - "6379:6379"  # REMOVED - prevents external access
-    volumes:
-      - redis_data:/data
-      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
-    networks:
-      - ocr_network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    # SECURITY: Require password authentication and use secure config
-    command: >
-      redis-server /usr/local/etc/redis/redis.conf
-      --requirepass ${REDIS_PASSWORD}
-      --bind 0.0.0.0
-      --protected-mode yes
-      --appendonly yes
-      --maxmemory 3gb  # Optimized for 24GB RAM VPS - increased cache capacity
-      --maxmemory-policy allkeys-lru
-    environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
-    deploy:
-      resources:
-        limits:
-          memory: 3G  # Optimized for 24GB RAM VPS - increased Redis memory
-          cpus: '1.0'
-        reservations:
-          memory: 1G  # Increased reservation for better performance
-          cpus: '0.5'
+  # Local Redis service (optional - only use if not using external Redis Cloud)
+  # To use local Redis, uncomment this section and set REDIS_HOST=redis in .env
+  # To use Redis Cloud (recommended), keep this commented and set REDIS_HOST to your Redis Cloud hostname
+  # redis:
+  #   image: redis:7-alpine
+  #   # SECURITY: Redis port is NOT exposed to host - only accessible within Docker network
+  #   # ports:
+  #   #   - "6379:6379"  # REMOVED - prevents external access
+  #   volumes:
+  #     - redis_data:/data
+  #     - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+  #   networks:
+  #     - ocr_network
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 3
+  #   # SECURITY: Require password authentication and use secure config
+  #   command: >
+  #     redis-server /usr/local/etc/redis/redis.conf
+  #     --requirepass ${REDIS_PASSWORD}
+  #     --bind 0.0.0.0
+  #     --protected-mode yes
+  #     --appendonly yes
+  #     --maxmemory 3gb  # Optimized for 24GB RAM VPS - increased cache capacity
+  #     --maxmemory-policy allkeys-lru
+  #   environment:
+  #     - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 3G  # Optimized for 24GB RAM VPS - increased Redis memory
+  #         cpus: '1.0'
+  #       reservations:
+  #         memory: 1G  # Increased reservation for better performance
+  #         cpus: '0.5'
 
   ocr-microservice:
     build:
@@ -44,35 +47,68 @@ services:
     # If running WITHOUT nginx profile, uncomment the port mapping below:
     # ports:
     #   - "5000:5000"  # Only uncomment if NOT using nginx (development mode)
+    # Load all environment variables from .env file
+    env_file:
+      - .env
     environment:
-      - FLASK_ENV=production
-      - PORT=5000
-      - HOST=0.0.0.0
-      - DEBUG=false
-      - OCR_LANG=en
-      - USE_GPU=false
-      - USE_PP_OCR_V5_SERVER=true
-      - USE_ANGLE_CLS=true
-      - DET_LIMIT_SIDE_LEN=1280
-      - REC_BATCH_NUM=8
-      - MAX_CONTENT_LENGTH=52428800
-      - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
-      - LOG_LEVEL=DEBUG
-      # Redis connection configuration - supports both direct params and URL
-      # Direct connection parameters (preferred):
-      - REDIS_HOST=${REDIS_HOST:-redis}
-      - REDIS_PORT=${REDIS_PORT:-6379}
+      # Flask Configuration
+      - FLASK_ENV=${FLASK_ENV:-production}
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=${DEBUG:-false}
+      - HOST=${HOST:-0.0.0.0}
+      - PORT=${PORT:-5000}
+      # OCR Configuration
+      - OCR_LANG=${OCR_LANG:-en}
+      - USE_GPU=${USE_GPU:-false}
+      - USE_PP_OCR_V5_SERVER=${USE_PP_OCR_V5_SERVER:-true}
+      - USE_ANGLE_CLS=${USE_ANGLE_CLS:-true}
+      - DET_LIMIT_SIDE_LEN=${DET_LIMIT_SIDE_LEN:-1280}
+      - REC_BATCH_NUM=${REC_BATCH_NUM:-8}
+      - DET_DB_THRESH=${DET_DB_THRESH:-0.3}
+      - DET_DB_BOX_THRESH=${DET_DB_BOX_THRESH:-0.6}
+      - DROP_SCORE=${DROP_SCORE:-0.5}
+      # File Upload Configuration
+      - MAX_CONTENT_LENGTH=${MAX_CONTENT_LENGTH:-52428800}
+      - UPLOAD_FOLDER=${UPLOAD_FOLDER:-/tmp/ocr_uploads}
+      - MAX_IMAGE_SIZE=${MAX_IMAGE_SIZE:-10485760}
+      - MAX_IMAGE_WIDTH=${MAX_IMAGE_WIDTH:-4096}
+      - MAX_IMAGE_HEIGHT=${MAX_IMAGE_HEIGHT:-4096}
+      # PDF Processing Configuration
+      - MAX_PDF_SIZE=${MAX_PDF_SIZE:-52428800}
+      - MAX_PDF_PAGES=${MAX_PDF_PAGES:-100}
+      - DEFAULT_DPI=${DEFAULT_DPI:-300}
+      - MAX_DPI=${MAX_DPI:-600}
+      - MIN_DPI=${MIN_DPI:-72}
+      # PDF Hybrid Processing Configuration
+      - PDF_HYBRID_MAX_PAGES=${PDF_HYBRID_MAX_PAGES:-5000}
+      - PDF_HYBRID_DEFAULT_DPI=${PDF_HYBRID_DEFAULT_DPI:-300}
+      - PDF_HYBRID_MAX_DPI=${PDF_HYBRID_MAX_DPI:-600}
+      - PDF_HYBRID_DEFAULT_CHUNK_SIZE=${PDF_HYBRID_DEFAULT_CHUNK_SIZE:-50}
+      - PDF_HYBRID_TEMP_DIR=${PDF_HYBRID_TEMP_DIR:-/tmp/pdf_hybrid_uploads}
+      - PDF_HYBRID_TEXT_THRESHOLD=${PDF_HYBRID_TEXT_THRESHOLD:-30}
+      - PDF_HYBRID_IMAGE_AREA_THRESHOLD=${PDF_HYBRID_IMAGE_AREA_THRESHOLD:-0.0}
+      # Performance Settings
+      - MAX_WORKERS=${MAX_WORKERS:-2}
+      - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-300}
+      # Logging Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-%(asctime)s - %(name)s - %(levelname)s - %(message)s}
+      # Health Check Configuration
+      - MIN_CONFIDENCE=${MIN_CONFIDENCE:-0.0}
+      # Redis connection configuration - uses centralized Redis connection manager
+      # IMPORTANT: These values MUST come from .env file (no defaults to local Redis)
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
       - REDIS_USERNAME=${REDIS_USERNAME:-default}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_DB=${REDIS_DB:-0}
-      # URL-based connection (fallback for backward compatibility)
-      # If REDIS_URL is set in your shell, it will be used directly
-      # Format: redis://:password@redis:6379/0 or redis://username:password@redis:6379/0
       - REDIS_URL=${REDIS_URL:-}
-      # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will use centralized Redis connection manager
-      - RATE_LIMIT_PER_MINUTE=10
-      # SECURITY: API key authentication - required for /ocr/* endpoints
-      - AUTH_TOKEN=${AUTH_TOKEN:-1QHRD48KoetalQhxg14KwMe1MKjRw7Mbj9BwlBUm74M=}
+      - REDIS_CACHE_TTL=${REDIS_CACHE_TTL:-3600}
+      # Rate Limiting Configuration
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-10}
+      - PDF_HYBRID_RATE_LIMIT_PER_MINUTE=${PDF_HYBRID_RATE_LIMIT_PER_MINUTE:-20}
+      # API Authentication
+      - AUTH_TOKEN=${AUTH_TOKEN}
       # Configure PaddlePaddle cache directories explicitly
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
@@ -82,8 +118,8 @@ services:
       - logs_data:/app/logs  # Use named volume instead of bind mount for read-only compatibility
       - paddlex_models:/tmp/.paddlex  # Mount volume at /tmp/.paddlex since HOME=/tmp
     restart: unless-stopped
-    depends_on:
-      - redis
+    # Removed depends_on: redis - services connect to Redis Cloud externally
+    # If using local Redis, uncomment: depends_on: - redis
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health/ready"]
       interval: 30s
@@ -110,28 +146,34 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    # Load all environment variables from .env file
+    env_file:
+      - .env
     environment:
-      - FLASK_ENV=production
-      - OCR_LANG=en
-      - USE_GPU=false
-      - USE_PP_OCR_V5_SERVER=true
-      - USE_ANGLE_CLS=true
-      - DET_LIMIT_SIDE_LEN=1280
-      - REC_BATCH_NUM=8
-      # Redis connection configuration - supports both direct params and URL
-      # Direct connection parameters (preferred):
-      - REDIS_HOST=${REDIS_HOST:-redis}
-      - REDIS_PORT=${REDIS_PORT:-6379}
+      # Flask Configuration
+      - FLASK_ENV=${FLASK_ENV:-production}
+      # OCR Configuration
+      - OCR_LANG=${OCR_LANG:-en}
+      - USE_GPU=${USE_GPU:-false}
+      - USE_PP_OCR_V5_SERVER=${USE_PP_OCR_V5_SERVER:-true}
+      - USE_ANGLE_CLS=${USE_ANGLE_CLS:-true}
+      - DET_LIMIT_SIDE_LEN=${DET_LIMIT_SIDE_LEN:-1280}
+      - REC_BATCH_NUM=${REC_BATCH_NUM:-8}
+      - DET_DB_THRESH=${DET_DB_THRESH:-0.3}
+      - DET_DB_BOX_THRESH=${DET_DB_BOX_THRESH:-0.6}
+      - DROP_SCORE=${DROP_SCORE:-0.5}
+      # Logging Configuration
+      - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+      # Redis connection configuration - uses centralized Redis connection manager
+      # IMPORTANT: These values MUST come from .env file (no defaults to local Redis)
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
       - REDIS_USERNAME=${REDIS_USERNAME:-default}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_DB=${REDIS_DB:-0}
-      # URL-based connection (fallback for backward compatibility)
-      # Format: redis://:password@redis:6379/0 or redis://username:password@redis:6379/0
       - REDIS_URL=${REDIS_URL:-}
-      # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will use centralized Redis connection manager
-      - LOG_LEVEL=DEBUG
-      # SECURITY: API key authentication - required for /ocr/* endpoints
-      - AUTH_TOKEN=${AUTH_TOKEN:-1QHRD48KoetalQhxg14KwMe1MKjRw7Mbj9BwlBUm74M=}
+      # API Authentication
+      - AUTH_TOKEN=${AUTH_TOKEN}
       # Configure PaddlePaddle cache directories explicitly
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
@@ -143,7 +185,8 @@ services:
       - paddlex_models:/tmp/.paddlex  # Mount volume at /tmp/.paddlex since HOME=/tmp
     restart: unless-stopped
     depends_on:
-      - redis
+      # Removed depends_on: redis - services connect to Redis Cloud externally
+      # If using local Redis, uncomment: - redis
       - ocr-microservice
     healthcheck:
       test: ["CMD", "true"]
