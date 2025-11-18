@@ -23,26 +23,20 @@ from celery_app import celery_app
 from services.ocr_service.ocr_service import OCRService
 from services.redis_service import RedisService
 from utils.encoding import decode_base64, generate_file_hash
-from config import get_config
+from utils.service_manager import get_ocr_service, get_redis_service
+from utils.resource_manager import cleanup_memory
 
 logger = logging.getLogger(__name__)
-
-# Initialize services (will be reused across tasks)
-ocr_service = None
-redis_service = None
 
 
 @signals.worker_ready.connect
 def preload_ocr_service(sender, **kwargs):
     """Pre-initialize OCR service when worker starts to avoid delay on first task."""
-    global ocr_service
-    logger.info("Worker ready - pre-initializing OCR service...")
+    logger.info("Worker ready - pre-initializing OCR service via ServiceManager...")
     try:
-        ocr_service = OCRService()
-        config = get_config()
-        # Initialize OCR with PaddleOCR 3.x pipeline API (following official docs)
-        ocr_service.initialize_ocr(lang=config.OCR_LANG)
-        logger.info("OCR service pre-initialized successfully - ready to process tasks!")
+        # Use service manager to get OCR service (will initialize if needed)
+        ocr_service = get_ocr_service()
+        logger.info("OCR service pre-initialized successfully via ServiceManager - ready to process tasks!")
     except Exception as e:
         logger.warning(f"Failed to pre-initialize OCR service: {str(e)}. Will initialize on first task.")
 
@@ -96,37 +90,8 @@ def _process_ocr_with_cache(
     return result
 
 
-def get_ocr_service() -> OCRService:
-    """Get or initialize OCR service."""
-    global ocr_service
-    if ocr_service is None:
-        ocr_service = OCRService()
-        from config import get_config
-        config = get_config()
-        # Initialize OCR with PaddleOCR 3.x pipeline API (following official docs)
-        ocr_service.initialize_ocr(lang=config.OCR_LANG)
-    return ocr_service
-
-
-def get_redis_service() -> RedisService:
-    """Get or initialize Redis service with error handling."""
-    global redis_service
-    if redis_service is None:
-        try:
-            redis_service = RedisService()
-        except Exception as e:
-            logger.warning(f"Failed to initialize Redis service: {str(e)}. OCR will work without caching.")
-            redis_service = None
-    
-    # Verify connection is still active
-    if redis_service and not redis_service.is_connected():
-        logger.warning("Redis connection lost, attempting to reconnect...")
-        try:
-            redis_service._connect()
-        except Exception as e:
-            logger.warning(f"Redis reconnection failed: {str(e)}")
-    
-    return redis_service
+# Service access functions now use centralized service manager
+# Imported from utils.service_manager for consistency
 
 
 class OCRTask(Task):
@@ -223,7 +188,8 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
             "filename": filename
         }
     finally:
-        # Cleanup memory
+        # Cleanup memory using resource manager
+        cleanup_memory(force=False)
         ocr_svc = get_ocr_service()
         ocr_svc.cleanup_memory()
 
@@ -285,6 +251,7 @@ def process_pdf_task(self, pdf_data_b64: str, filename: str = "", dpi: int = 300
             "total_pages": 0
         }
     finally:
-        # Cleanup memory
+        # Cleanup memory using resource manager
+        cleanup_memory(force=False)
         ocr_svc = get_ocr_service()
         ocr_svc.cleanup_memory()

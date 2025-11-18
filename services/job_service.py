@@ -5,10 +5,12 @@ Job Service - Handles async job status and result management
 import logging
 from typing import Dict, Any, Optional
 from celery.result import AsyncResult
-from celery_app import celery_app
+from celery_app import celery_app, ensure_result_backend_connection
 from tasks.ocr_tasks import process_image_task, process_pdf_task
 from utils.encoding import encode_base64
 from utils.validators import validate_job_id
+from utils.redis_connection import get_redis_manager
+from redis.exceptions import AuthenticationError, ConnectionError
 
 logger = logging.getLogger(__name__)
 
@@ -16,27 +18,63 @@ logger = logging.getLogger(__name__)
 class JobService:
     """
     Service class for managing async OCR jobs.
+    Uses centralized Redis connection manager for consistent connection handling.
     """
 
     def __init__(self):
         self.celery_app = celery_app
+        self.redis_manager = get_redis_manager()
     
     def _ensure_backend_connection(self):
         """Ensure Celery result backend connection is established."""
         try:
-            backend = self.celery_app.backend
-            if hasattr(backend, 'client'):
-                # Ping to ensure connection is alive
-                backend.client.ping()
+            # First, ensure centralized Redis connection is alive
+            if not self.redis_manager.is_connected():
+                logger.warning("Centralized Redis connection lost, attempting reconnect...")
+                if not self.redis_manager.reconnect():
+                    logger.error("Failed to reconnect via centralized connection manager")
+                    raise ConnectionError("Redis connection unavailable")
+            
+            # Use centralized connection check function
+            if not ensure_result_backend_connection():
+                logger.warning("Result backend connection check failed, will retry")
+                # Try to reset connection pool and reconnect
+                backend = self.celery_app.backend
+                try:
+                    if hasattr(backend, 'client') and hasattr(backend.client, 'connection_pool'):
+                        backend.client.connection_pool.disconnect()
+                        backend.client.connection_pool.reset()
+                        # Force reconnection via centralized manager
+                        self.redis_manager.reconnect()
+                except Exception as reset_error:
+                    logger.debug(f"Connection pool reset error: {str(reset_error)}")
+        except AuthenticationError as e:
+            logger.error(f"Result backend authentication error: {str(e)}")
+            # Force reconnection via centralized manager
+            logger.info("Forcing Redis reconnection via centralized manager due to auth error...")
+            if self.redis_manager.reconnect():
+                # Reset Celery backend connection pool
+                backend = self.celery_app.backend
+                try:
+                    if hasattr(backend, 'client') and hasattr(backend.client, 'connection_pool'):
+                        backend.client.connection_pool.disconnect()
+                        backend.client.connection_pool.reset()
+                except Exception as reset_error:
+                    logger.debug(f"Connection pool reset failed: {str(reset_error)}")
+            else:
+                logger.error("Failed to reconnect after authentication error")
         except Exception as e:
             logger.warning(f"Result backend connection check failed, will retry: {str(e)}")
             # Try to reset connection pool and reconnect
             try:
+                backend = self.celery_app.backend
                 if hasattr(backend, 'client') and hasattr(backend.client, 'connection_pool'):
                     backend.client.connection_pool.disconnect()
                     backend.client.connection_pool.reset()
-            except:
-                pass
+                    # Attempt reconnection via centralized manager
+                    self.redis_manager.reconnect()
+            except Exception as reset_error:
+                logger.debug(f"Connection pool reset error: {str(reset_error)}")
             # Connection will be retried when task is created
 
     def get_job_status(self, job_id: str) -> Dict[str, Any]:

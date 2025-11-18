@@ -18,7 +18,7 @@ from utils.constants import (
     CACHE_DPI_SUFFIX,
     RATE_LIMIT_WINDOW_SECONDS
 )
-from utils.encoding import mask_redis_url, generate_file_hash
+from utils.redis_connection import get_redis_manager
 
 logger = logging.getLogger(__name__)
 
@@ -26,48 +26,39 @@ logger = logging.getLogger(__name__)
 class RedisService:
     """
     Service class for Redis operations including caching and rate limiting.
+    Uses centralized Redis connection manager for consistent connection handling.
     """
 
     def __init__(self):
         self.config = get_config()
+        self.redis_manager = get_redis_manager()
         self.redis_client: Optional[redis.Redis] = None
         self._connect()
 
     def _connect(self, retry_count: int = 0, max_retries: int = 3) -> None:
         """
-        Initialize Redis connection with retry logic and exponential backoff.
+        Initialize Redis connection using centralized connection manager.
         
         Args:
             retry_count: Current retry attempt number
             max_retries: Maximum number of retry attempts
         """
-        redis_url = self.config.REDIS_URL
-        
-        # Mask password in logs for security
-        safe_url = mask_redis_url(redis_url)
-        
         if retry_count == 0:
-            logger.info(f"Attempting to connect to Redis at: {safe_url}")
+            logger.info("Attempting to connect to Redis using centralized connection manager")
         else:
-            logger.info(f"Retrying Redis connection (attempt {retry_count + 1}/{max_retries + 1}): {safe_url}")
+            logger.info(f"Retrying Redis connection (attempt {retry_count + 1}/{max_retries + 1})")
         
         try:
-            # Use connection pooling for better performance
-            self.redis_client = redis.from_url(
-                redis_url,
-                decode_responses=True,
-                socket_connect_timeout=5,
-                socket_timeout=5,
-                retry_on_timeout=True,
-                health_check_interval=30,
-                socket_keepalive=True,
-                socket_keepalive_options={},
-                max_connections=50,  # Connection pool size
-                retry_on_error=[redis.ConnectionError, redis.TimeoutError]
-            )
+            # Get client from centralized connection manager
+            self.redis_client = self.redis_manager.get_client(force_reconnect=(retry_count > 0))
+            
+            if self.redis_client is None:
+                raise ConnectionError("Failed to get Redis client from connection manager")
+            
             # Test connection
             self.redis_client.ping()
-            logger.info(f"Redis connected successfully: {safe_url}")
+            logger.info("Redis connected successfully via centralized connection manager")
+            
         except redis.ConnectionError as e:
             if retry_count < max_retries:
                 # Exponential backoff: 1s, 2s, 4s
@@ -77,14 +68,12 @@ class RedisService:
                 return self._connect(retry_count + 1, max_retries)
             else:
                 logger.error(f"Redis connection error after {max_retries + 1} attempts: {str(e)}")
-                logger.error(f"  Attempted URL: {safe_url}")
                 logger.warning("Redis operations will be disabled. OCR will work without caching.")
-                logger.warning("  Check that Redis service is running and accessible at the configured URL.")
+                logger.warning("  Check that Redis service is running and accessible.")
                 self.redis_client = None
         except redis.AuthenticationError as e:
             logger.error(f"Redis authentication error: {str(e)}")
-            logger.error(f"  Attempted URL: {safe_url}")
-            logger.error("  Check REDIS_PASSWORD environment variable is set correctly.")
+            logger.error("  Check REDIS_PASSWORD or REDIS_URL environment variable is set correctly.")
             logger.warning("Redis operations will be disabled. OCR will work without caching.")
             self.redis_client = None
         except redis.ResponseError as e:
@@ -110,15 +99,25 @@ class RedisService:
                 return self._connect(retry_count + 1, max_retries)
             else:
                 logger.error(f"Failed to connect to Redis after {max_retries + 1} attempts: {str(e)}")
-                logger.error(f"  Attempted URL: {safe_url}")
                 logger.error(f"  Error type: {type(e).__name__}")
                 logger.warning("Redis operations will be disabled. OCR will work without caching.")
                 self.redis_client = None
 
     def is_connected(self) -> bool:
         """Check if Redis is connected and attempt reconnection if needed."""
+        # Use centralized connection manager's connection check
+        if self.redis_manager.is_connected():
+            # Update local reference
+            self.redis_client = self.redis_manager.get_client()
+            return True
+        
+        # Try to reconnect via centralized manager
+        if self.redis_manager.reconnect():
+            self.redis_client = self.redis_manager.get_client()
+            return True
+        
+        # Fallback to local reconnection attempt
         if self.redis_client is None:
-            # Try to reconnect once
             self._connect()
             if self.redis_client is None:
                 return False
@@ -126,27 +125,11 @@ class RedisService:
         try:
             self.redis_client.ping()
             return True
-        except redis.ResponseError as e:
-            # Handle Redis state changes
-            error_msg = str(e).lower()
-            if 'unblocked' in error_msg or 'instance state changed' in error_msg:
-                logger.warning("Redis state changed, reconnecting...")
-                self._connect()
-                try:
-                    self.redis_client.ping()
-                    return True
-                except Exception:
-                    return False
-            return False
         except Exception:
-            # Try to reconnect once on any other error
-            try:
-                self._connect()
-                if self.redis_client:
-                    self.redis_client.ping()
-                    return True
-            except Exception:
-                pass
+            # Try centralized manager reconnect
+            if self.redis_manager.reconnect():
+                self.redis_client = self.redis_manager.get_client()
+                return True
             return False
 
     def _build_cache_key(self, file_hash: str, dpi: Optional[int] = None) -> str:
@@ -299,17 +282,12 @@ class RedisService:
         """
         Close Redis connection and cleanup resources.
         
-        This should be called when the service is being destroyed
-        to properly release connections.
+        Note: The centralized connection manager maintains the connection,
+        so we only clear the local reference here. The manager will handle
+        connection cleanup when appropriate.
         """
-        if self.redis_client is not None:
-            try:
-                self.redis_client.close()
-                logger.info("Redis connection closed")
-            except Exception as e:
-                logger.warning(f"Error closing Redis connection: {str(e)}")
-            finally:
-                self.redis_client = None
+        # Clear local reference only - centralized manager maintains connection
+        self.redis_client = None
 
     def store_chunk_result(self, job_id: str, chunk_id: int, chunk_result: dict) -> bool:
         """

@@ -10,6 +10,7 @@ from celery.signals import worker_ready, worker_shutting_down
 import redis
 from redis.exceptions import ResponseError, ConnectionError, AuthenticationError
 from config import get_config
+from utils.redis_connection import get_redis_manager
 from utils.encoding import mask_redis_url
 
 logger = logging.getLogger(__name__)
@@ -17,24 +18,32 @@ logger = logging.getLogger(__name__)
 # Get configuration
 config = get_config()
 
+# Get centralized Redis connection manager
+redis_manager = get_redis_manager()
+
+# Get Redis connection URL from centralized manager (ensures consistent auth)
+# Use explicit env vars if set, otherwise use centralized manager's URL
+celery_broker_url = os.getenv('CELERY_BROKER_URL', redis_manager.get_connection_url())
+celery_backend_url = os.getenv('CELERY_RESULT_BACKEND', redis_manager.get_connection_url())
+
 # Log the actual URLs being used for debugging (with masked password)
-safe_broker_url = mask_redis_url(config.CELERY_BROKER_URL)
-safe_backend_url = mask_redis_url(config.CELERY_RESULT_BACKEND)
+safe_broker_url = mask_redis_url(celery_broker_url)
+safe_backend_url = mask_redis_url(celery_backend_url)
 logger.info(f"Initializing Celery with broker: {safe_broker_url}")
 logger.info(f"Initializing Celery with backend: {safe_backend_url}")
 
 # Create Celery app instance
 celery_app = Celery(
     'ocr_tasks',
-    broker=config.CELERY_BROKER_URL,
-    backend=config.CELERY_RESULT_BACKEND,
+    broker=celery_broker_url,
+    backend=celery_backend_url,
     include=['tasks.ocr_tasks', 'tasks.pdf_hybrid_tasks']
 )
 
 # Celery configuration - explicitly set broker and backend URLs with resilience
 celery_app.conf.update(
-    broker_url=config.CELERY_BROKER_URL,  # Explicit broker URL
-    result_backend=config.CELERY_RESULT_BACKEND,  # Explicit result backend
+    broker_url=celery_broker_url,  # Explicit broker URL from centralized manager
+    result_backend=celery_backend_url,  # Explicit result backend from centralized manager
     task_serializer='json',
     accept_content=['json'],
     result_serializer='json',
@@ -45,7 +54,7 @@ celery_app.conf.update(
     task_soft_time_limit=540,  # 9 minutes soft limit
     worker_prefetch_multiplier=1,
     worker_max_tasks_per_child=10,  # Restart worker after 10 tasks to prevent memory leaks
-    worker_concurrency=1,  # Use only 1 worker to avoid multiple model loads (CRITICAL FIX)
+    worker_concurrency=2,  # Optimized for 24GB RAM VPS - balance parallelism and memory usage
     result_expires=3600,  # Results expire after 1 hour
     broker_connection_retry_on_startup=True,  # Retry connection on startup
     broker_connection_retry=True,  # Enable connection retries
@@ -138,12 +147,34 @@ def worker_shutting_down_handler(sender=None, **kwargs):
 def ensure_result_backend_connection():
     """Ensure Celery result backend connection is established."""
     try:
+        # First, ensure centralized connection manager is connected
+        if not redis_manager.is_connected():
+            logger.warning("Centralized Redis connection lost, attempting reconnect...")
+            if not redis_manager.reconnect():
+                logger.error("Failed to reconnect via centralized connection manager")
+                return False
+        
+        # Now check Celery backend connection
         backend = celery_app.backend
         if hasattr(backend, 'client'):
             # Force connection establishment by pinging
             backend.client.ping()
             logger.debug("Result backend connection verified")
             return True
+    except AuthenticationError as e:
+        logger.error(f"Result backend authentication error: {str(e)}")
+        # Force reconnection via centralized manager
+        logger.info("Forcing Redis reconnection via centralized manager...")
+        if redis_manager.reconnect():
+            # Reset Celery backend connection pool
+            try:
+                if hasattr(backend, 'client') and hasattr(backend.client, 'connection_pool'):
+                    backend.client.connection_pool.disconnect()
+                    backend.client.connection_pool.reset()
+            except Exception as reset_error:
+                logger.debug(f"Connection pool reset failed: {str(reset_error)}")
+            return False
+        return False
     except Exception as e:
         logger.warning(f"Result backend connection check failed: {str(e)}")
         # Try to reconnect by resetting the connection pool
@@ -164,3 +195,4 @@ logger.info(f"Celery app configured successfully")
 logger.info(f"  Broker URL: {safe_broker_url}")
 logger.info(f"  Result Backend: {safe_backend_url}")
 logger.info("  Redis resilience: Enabled (retry on state changes, connection pooling)")
+logger.info("  Using centralized Redis connection manager for consistent authentication")

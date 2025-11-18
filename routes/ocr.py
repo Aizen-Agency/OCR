@@ -10,12 +10,8 @@ ocr_bp = Blueprint('ocr', __name__, url_prefix='/ocr')
 
 
 def get_ocr_controller() -> OCRController:
-    """Get OCR controller instance with app's services."""
-    return OCRController(
-        current_app.ocr_service,
-        current_app.job_service,
-        current_app.redis_service
-    )
+    """Get OCR controller instance (uses service manager internally)."""
+    return OCRController()
 
 
 @ocr_bp.route('/image', methods=['POST'])

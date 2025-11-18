@@ -22,17 +22,17 @@ services:
       --bind 0.0.0.0
       --protected-mode yes
       --appendonly yes
-      --maxmemory 2gb
+      --maxmemory 3gb  # Optimized for 24GB RAM VPS - increased cache capacity
       --maxmemory-policy allkeys-lru
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 3G  # Optimized for 24GB RAM VPS - increased Redis memory
           cpus: '1.0'
         reservations:
-          memory: 512M
+          memory: 1G  # Increased reservation for better performance
           cpus: '0.5'
 
   ocr-microservice:
@@ -58,12 +58,18 @@ services:
       - MAX_CONTENT_LENGTH=52428800
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
       - LOG_LEVEL=DEBUG
-      # Use REDIS_URL directly from environment if set, otherwise construct from REDIS_PASSWORD
-      # If REDIS_URL is set in your shell, it will be used directly
-      # Format: redis://:password@redis:6379/0
-      - REDIS_URL=${REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379/0}
+      # Redis connection configuration - supports both direct params and URL
+      # Direct connection parameters (preferred):
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_USERNAME=${REDIS_USERNAME:-default}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
-      # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will use REDIS_URL from config.py
+      - REDIS_DB=${REDIS_DB:-0}
+      # URL-based connection (fallback for backward compatibility)
+      # If REDIS_URL is set in your shell, it will be used directly
+      # Format: redis://:password@redis:6379/0 or redis://username:password@redis:6379/0
+      - REDIS_URL=${REDIS_URL:-}
+      # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will use centralized Redis connection manager
       - RATE_LIMIT_PER_MINUTE=10
       # SECURITY: API key authentication - required for /ocr/* endpoints
       - AUTH_TOKEN=${AUTH_TOKEN:-1QHRD48KoetalQhxg14KwMe1MKjRw7Mbj9BwlBUm74M=}
@@ -112,10 +118,17 @@ services:
       - USE_ANGLE_CLS=true
       - DET_LIMIT_SIDE_LEN=1280
       - REC_BATCH_NUM=8
-      # Use REDIS_URL directly from environment if set, otherwise construct from REDIS_PASSWORD
-      - REDIS_URL=${REDIS_URL:-redis://:${REDIS_PASSWORD}@redis:6379/0}
+      # Redis connection configuration - supports both direct params and URL
+      # Direct connection parameters (preferred):
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_USERNAME=${REDIS_USERNAME:-default}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-change-this-redis-password-in-production}
-      # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will use REDIS_URL from config.py
+      - REDIS_DB=${REDIS_DB:-0}
+      # URL-based connection (fallback for backward compatibility)
+      # Format: redis://:password@redis:6379/0 or redis://username:password@redis:6379/0
+      - REDIS_URL=${REDIS_URL:-}
+      # CELERY_BROKER_URL and CELERY_RESULT_BACKEND will use centralized Redis connection manager
       - LOG_LEVEL=DEBUG
       # SECURITY: API key authentication - required for /ocr/* endpoints
       - AUTH_TOKEN=${AUTH_TOKEN:-1QHRD48KoetalQhxg14KwMe1MKjRw7Mbj9BwlBUm74M=}
@@ -123,7 +136,7 @@ services:
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
       - PADDLEPADDLE_CACHE_DIR=/tmp/.paddlex
-    command: celery -A celery_app worker --loglevel=info --concurrency=4
+    command: celery -A celery_app worker --loglevel=info --concurrency=2  # Optimized for 24GB RAM - balance parallelism and memory
     volumes:
       - ocr_uploads:/tmp/ocr_uploads
       - logs_data:/app/logs  # Use named volume for consistency

@@ -10,11 +10,8 @@ pdf_hybrid_bp = Blueprint('pdf_hybrid', __name__, url_prefix='/pdf')
 
 
 def get_pdf_hybrid_controller() -> PDFHybridController:
-    """Get PDF hybrid controller instance with app's services."""
-    return PDFHybridController(
-        current_app.job_service,
-        current_app.redis_service
-    )
+    """Get PDF hybrid controller instance (uses service manager internally)."""
+    return PDFHybridController()
 
 
 # Note: Rate limiting for PDF hybrid endpoint is handled by the main rate limiter middleware

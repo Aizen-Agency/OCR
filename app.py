@@ -16,6 +16,7 @@ from middleware.auth_middleware import register_auth_middleware
 from services.ocr_service.ocr_service import OCRService
 from services.redis_service import RedisService
 from services.job_service import JobService
+from utils.service_manager import get_service_manager
 
 logger = logging.getLogger(__name__)
 
@@ -133,31 +134,27 @@ def _register_services(app: Flask) -> None:
     logger = logging.getLogger(__name__)
 
     try:
-        # Initialize Redis service (gracefully handles connection failures)
-        # RedisService.__init__ should never raise - it only sets redis_client to None on failure
-        redis_service = RedisService()
-        if redis_service.is_connected():
-            logger.info("Redis service initialized and connected")
+        # Use service manager for centralized service initialization
+        # This ensures all services use shared instances and proper initialization
+        service_manager = get_service_manager()
+        
+        # Initialize services via service manager (lazy initialization)
+        redis_service = service_manager.get_redis_service()
+        job_service = service_manager.get_job_service()
+        ocr_service = service_manager.get_ocr_service()
+        
+        # Store service instances in app context for backward compatibility
+        # Controllers now use service manager internally, but some code may still access app.ocr_service
+        app.redis_service = redis_service
+        app.job_service = job_service
+        app.ocr_service = ocr_service
+        
+        if redis_service and redis_service.is_connected():
+            logger.info("Redis service initialized and connected via ServiceManager")
         else:
             logger.warning("Redis service initialized but not connected - will work without caching")
         
-        app.redis_service = redis_service
-
-        # Initialize Job service
-        job_service = JobService()
-        app.job_service = job_service
-
-        # Initialize OCR service with PaddleOCR 3.x simplified API
-        ocr_service = OCRService()
-        ocr_config = get_config()
-        
-        # Initialize OCR with PaddleOCR 3.x pipeline API (following official docs)
-        ocr_service.initialize_ocr(lang=ocr_config.OCR_LANG)
-
-        # Store service instances in app context for access by controllers
-        app.ocr_service = ocr_service
-
-        logger.info("Services initialized successfully")
+        logger.info("Services initialized successfully via ServiceManager")
 
     except Exception as e:
         logger.error(f"Failed to initialize critical services: {str(e)}", exc_info=True)

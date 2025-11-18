@@ -34,47 +34,30 @@ from services.ocr_service.ocr_service import OCRService
 from services.redis_service import RedisService
 from services.page_classifier import classify_page
 from services.pdf_hybrid_service import PDFHybridService
-from utils.resource_cleanup import pdf_document_context, cleanup_temp_file, force_memory_cleanup
+from utils.resource_cleanup import pdf_document_context, cleanup_temp_file
 from utils.validation import validate_file_path
+from utils.service_manager import get_ocr_service, get_redis_service
+from utils.resource_manager import cleanup_memory
 
 logger = logging.getLogger(__name__)
 
-# Initialize services (will be reused across tasks)
-ocr_service = None
-redis_service = None
+# PDF hybrid service instance (not managed by service manager yet)
 pdf_hybrid_service = None
 
 
 @signals.worker_ready.connect
 def preload_services(sender, **kwargs):
     """Pre-initialize services when worker starts."""
-    global ocr_service, redis_service, pdf_hybrid_service
-    logger.info("Worker ready - pre-initializing services for hybrid PDF processing...")
+    global pdf_hybrid_service
+    logger.info("Worker ready - pre-initializing services for hybrid PDF processing via ServiceManager...")
     try:
-        redis_service = RedisService()
+        # Initialize services via service manager
+        get_redis_service()
         pdf_hybrid_service = PDFHybridService()
-        # OCR service will be initialized on first use
-        logger.info("Services pre-initialized successfully")
+        # OCR service will be initialized on first use via service manager
+        logger.info("Services pre-initialized successfully via ServiceManager")
     except Exception as e:
         logger.warning(f"Failed to pre-initialize services: {str(e)}")
-
-
-def get_ocr_service() -> OCRService:
-    """Get or initialize OCR service."""
-    global ocr_service
-    if ocr_service is None:
-        ocr_service = OCRService()
-        config = get_config()
-        ocr_service.initialize_ocr(lang=config.OCR_LANG)
-    return ocr_service
-
-
-def get_redis_service() -> RedisService:
-    """Get or initialize Redis service."""
-    global redis_service
-    if redis_service is None:
-        redis_service = RedisService()
-    return redis_service
 
 
 def get_pdf_hybrid_service() -> PDFHybridService:
@@ -83,6 +66,9 @@ def get_pdf_hybrid_service() -> PDFHybridService:
     if pdf_hybrid_service is None:
         pdf_hybrid_service = PDFHybridService()
     return pdf_hybrid_service
+
+# Service access functions now use centralized service manager
+# Imported from utils.service_manager for consistency
 
 
 class HybridPDFTask(Task):
@@ -186,7 +172,7 @@ def process_pdf_chunk(
                     )
 
                     # Force memory cleanup after each page to prevent accumulation
-                    force_memory_cleanup()
+                    cleanup_memory(force=False)
 
                 except Exception as page_error:
                     logger.error(f"Error processing page {page_index}: {str(page_error)}")
@@ -199,7 +185,7 @@ def process_pdf_chunk(
                         "error": str(page_error)
                     })
                     # Cleanup memory even on error
-                    force_memory_cleanup()
+                    cleanup_memory(force=False)
 
         # Store chunk result in Redis
         chunk_result = {

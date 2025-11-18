@@ -1,133 +1,51 @@
 """
 OCR Controller - Handles OCR-related business logic
+
+Refactored to use BaseController and helpers for clean architecture.
 """
 
 import logging
-import time
 from typing import Dict, Any, List
 from flask import request, current_app
 from werkzeug.utils import secure_filename
-from werkzeug.datastructures import FileStorage
 
-from services.ocr_service.ocr_service import OCRService
-from services.job_service import JobService
-from services.redis_service import RedisService
+from controllers.base_controller import BaseController
 from utils.constants import (
     ERROR_NO_FILE,
     ERROR_FILE_TOO_LARGE,
     ERROR_INVALID_DPI,
     ERROR_FILE_VALIDATION_FAILED,
     ERROR_INTERNAL_SERVER,
-    JOB_CREATED_MESSAGE,
     DEFAULT_DPI,
     MIN_DPI,
     MAX_DPI
 )
-from utils.validators import validate_dpi
+from utils.validation_helpers import validate_dpi_with_error, validate_batch_files
+from utils.response_helpers import (
+    create_job_status_response,
+    create_job_result_response,
+    format_batch_response
+)
+from utils.response_formatter import ResponseFormatter
+from utils.file_upload_helpers import is_image_file, is_pdf_file
+from utils.resource_manager import get_resource_manager
 
 logger = logging.getLogger(__name__)
 
 
-class OCRController:
+class OCRController(BaseController):
     """
     Controller class for handling OCR operations.
-    Contains all the business logic for OCR endpoints.
+    
+    Refactored to use BaseController and helper functions for clean architecture.
+    Keeps only orchestration logic, delegates validation and formatting to helpers.
     """
 
-    def __init__(self, ocr_service: OCRService, job_service: JobService, redis_service: RedisService):
-        self.ocr_service = ocr_service
-        self.job_service = job_service
-        self.redis_service = redis_service
-
-    def _validate_file_upload(self, file_field: str = 'file') -> tuple[FileStorage, str, int]:
-        """
-        Validate file upload from request.
-
-        Returns:
-            tuple: (file_object, filename, error_status_code)
-                   Returns (None, None, status_code) on error
-        """
-        # Check if file was uploaded
-        if file_field not in request.files:
-            return None, None, 400
-
-        file = request.files[file_field]
-
-        if file.filename == '':
-            return None, None, 400
-
-        # Secure filename
-        filename = secure_filename(file.filename)
-
-        return file, filename, 200
-
-    def _create_error_response(self, error: str, message: str, status_code: int = 400) -> tuple[Dict[str, Any], int]:
-        """
-        Create standardized error response.
-
-        Args:
-            error: Error type
-            message: Error message
-            status_code: HTTP status code
-
-        Returns:
-            tuple: (error_response_dict, status_code)
-        """
-        return {
-            "error": error,
-            "message": message
-        }, status_code
-
-    def _create_job_response(self, job_id: str, filename: str, file_size: int, **kwargs) -> Dict[str, Any]:
-        """
-        Create standardized job creation response.
-
-        Args:
-            job_id: Created job ID
-            filename: Filename
-            file_size: File size in bytes
-            **kwargs: Additional fields to include
-
-        Returns:
-            Job creation response dictionary
-        """
-        response = {
-            "job_id": job_id,
-            "status": "processing",
-            "filename": filename,
-            "file_size": file_size,
-            "message": JOB_CREATED_MESSAGE
-        }
-        response.update(kwargs)
-        return response
-
-    def _validate_file_size(self, file_data: bytes) -> tuple[bool, int]:
-        """
-        Validate file size against configured limits.
-
-        Returns:
-            tuple: (is_valid, error_status_code)
-        """
-        max_size = current_app.config['MAX_CONTENT_LENGTH']
-        if len(file_data) > max_size:
-            return False, 413
-        return True, 200
-
-    def _process_file_with_timing(self, processor_func, *args, **kwargs) -> tuple[Dict[str, Any], float]:
-        """
-        Process a file and track execution time.
-
-        Returns:
-            tuple: (result_dict, processing_time_seconds)
-        """
-        start_time = time.time()
-        try:
-            result = processor_func(*args, **kwargs)
-            processing_time = time.time() - start_time
-            return result, processing_time
-        finally:
-            # Always cleanup memory
-            self.ocr_service.cleanup_memory()
+    def __init__(self):
+        """Initialize OCR controller with services from service manager."""
+        super().__init__()
+        self.job_service = self.service_manager.get_job_service()
+        self.resource_manager = get_resource_manager()
 
     def process_image(self) -> tuple[Dict[str, Any], int]:
         """
@@ -137,7 +55,7 @@ class OCRController:
             tuple: (response_dict with job_id, status_code)
         """
         try:
-            # Validate file upload
+            # Validate file upload using helper
             file, filename, status_code = self._validate_file_upload('file')
             if status_code != 200:
                 if status_code == 400:
@@ -148,13 +66,13 @@ class OCRController:
                     )
                 return self._create_error_response(ERROR_FILE_VALIDATION_FAILED, "File validation failed", status_code)
 
-            # Read file data
-            file_data = file.read()
+            # Read file data using helper
+            file_data = self._read_file_data(file)
 
-            # Validate file size
+            # Validate file size using helper
             is_valid, status_code = self._validate_file_size(file_data)
             if not is_valid:
-                max_size_mb = current_app.config['MAX_CONTENT_LENGTH'] // (1024*1024)
+                max_size_mb = self._get_max_file_size_mb()
                 return self._create_error_response(
                     ERROR_FILE_TOO_LARGE,
                     f"File size exceeds maximum limit of {max_size_mb}MB",
@@ -166,7 +84,13 @@ class OCRController:
             # Create async job
             job_id = self.job_service.create_image_job(file_data, filename)
 
-            return self._create_job_response(job_id, filename, len(file_data)), 202
+            # Use ResponseFormatter for consistent response
+            response = ResponseFormatter.success_response(
+                data=self._create_job_response(job_id, filename, len(file_data)),
+                message="OCR job created successfully",
+                status_code=202
+            )
+            return response, 202
 
         except Exception as e:
             logger.error(f"Error creating image OCR job: {str(e)}")
@@ -180,7 +104,7 @@ class OCRController:
             tuple: (response_dict with job_id, status_code)
         """
         try:
-            # Validate file upload
+            # Validate file upload using helper
             file, filename, status_code = self._validate_file_upload('file')
             if status_code != 200:
                 if status_code == 400:
@@ -191,19 +115,19 @@ class OCRController:
                     )
                 return self._create_error_response(ERROR_FILE_VALIDATION_FAILED, "File validation failed", status_code)
 
-            # Get and validate DPI
-            dpi = request.args.get('dpi', DEFAULT_DPI, type=int)
-            is_valid_dpi, dpi_error = validate_dpi(dpi, MIN_DPI, MAX_DPI)
+            # Get and validate DPI using helper
+            dpi_param = request.args.get('dpi', DEFAULT_DPI)
+            is_valid_dpi, dpi, dpi_error = validate_dpi_with_error(dpi_param, MIN_DPI, MAX_DPI, DEFAULT_DPI)
             if not is_valid_dpi:
                 return self._create_error_response(ERROR_INVALID_DPI, dpi_error or f"DPI must be between {MIN_DPI} and {MAX_DPI}", 400)
 
-            # Read file data
-            file_data = file.read()
+            # Read file data using helper
+            file_data = self._read_file_data(file)
 
-            # Validate file size
+            # Validate file size using helper
             is_valid, status_code = self._validate_file_size(file_data)
             if not is_valid:
-                max_size_mb = current_app.config['MAX_CONTENT_LENGTH'] // (1024*1024)
+                max_size_mb = self._get_max_file_size_mb()
                 return self._create_error_response(
                     ERROR_FILE_TOO_LARGE,
                     f"File size exceeds maximum limit of {max_size_mb}MB",
@@ -215,7 +139,13 @@ class OCRController:
             # Create async job
             job_id = self.job_service.create_pdf_job(file_data, filename, dpi)
 
-            return self._create_job_response(job_id, filename, len(file_data), processing_dpi=dpi), 202
+            # Use ResponseFormatter for consistent response
+            response = ResponseFormatter.success_response(
+                data=self._create_job_response(job_id, filename, len(file_data), processing_dpi=dpi),
+                message="OCR job created successfully",
+                status_code=202
+            )
+            return response, 202
 
         except Exception as e:
             logger.error(f"Error creating PDF OCR job: {str(e)}")
@@ -229,23 +159,17 @@ class OCRController:
             tuple: (response_dict with job_ids, status_code)
         """
         try:
-            # Check if files were uploaded
-            if 'files' not in request.files:
-                return {
-                    "error": "No files provided",
-                    "message": "Please upload files with the 'files' field"
-                }, 400
+            # Validate batch files using helper
+            files = request.files.getlist('files') if 'files' in request.files else []
+            is_valid, error_msg, status_code = validate_batch_files(files)
+            if not is_valid:
+                return self._create_error_response("No files provided", error_msg or "Please upload files", status_code)
 
-            files = request.files.getlist('files')
-
-            if not files or all(file.filename == '' for file in files):
-                return {
-                    "error": "No valid files selected",
-                    "message": "Please select files to upload"
-                }, 400
-
-            # Get optional parameters
-            dpi = request.args.get('dpi', 300, type=int)
+            # Get and validate DPI using helper
+            dpi_param = request.args.get('dpi', DEFAULT_DPI)
+            is_valid_dpi, dpi, dpi_error = validate_dpi_with_error(dpi_param, MIN_DPI, MAX_DPI, DEFAULT_DPI)
+            if not is_valid_dpi:
+                dpi = DEFAULT_DPI  # Use default if invalid
 
             job_ids: List[Dict[str, Any]] = []
             total_files = 0
@@ -257,22 +181,23 @@ class OCRController:
 
                 total_files += 1
                 filename = secure_filename(file.filename)
-                file_data = file.read()
+                file_data = self._read_file_data(file)
 
-                # Validate file size
+                # Validate file size using helper
                 is_valid, status_code = self._validate_file_size(file_data)
                 if not is_valid:
+                    max_size_mb = self._get_max_file_size_mb()
                     job_ids.append({
                         "filename": filename,
                         "success": False,
-                        "error": f"File too large (max {current_app.config['MAX_CONTENT_LENGTH'] // (1024*1024)}MB)",
+                        "error": f"File too large (max {max_size_mb}MB)",
                         "type": "unknown"
                     })
                     continue
 
                 # Determine file type and create job accordingly
                 try:
-                    if filename.lower().endswith(('.pdf',)):
+                    if is_pdf_file(filename):
                         logger.info(f"Creating PDF job in batch: {filename}")
                         job_id = self.job_service.create_pdf_job(file_data, filename, dpi)
                         job_ids.append({
@@ -283,7 +208,7 @@ class OCRController:
                             "file_size": len(file_data)
                         })
                         created_jobs += 1
-                    elif filename.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp', '.gif')):
+                    elif is_image_file(filename):
                         logger.info(f"Creating image job in batch: {filename}")
                         job_id = self.job_service.create_image_job(file_data, filename)
                         job_ids.append({
@@ -312,16 +237,18 @@ class OCRController:
                         "type": "unknown"
                     })
 
-            response = {
-                "jobs": job_ids,
-                "summary": {
-                    "total_files": total_files,
-                    "jobs_created": created_jobs,
-                    "failed_files": total_files - created_jobs,
-                    "success": created_jobs > 0
-                },
-                "message": "Batch jobs created successfully. Use GET /ocr/job/{job_id} to check status for each job."
+            # Use helper for batch response formatting
+            summary = {
+                "total_files": total_files,
+                "jobs_created": created_jobs,
+                "failed_files": total_files - created_jobs,
+                "success": created_jobs > 0
             }
+            response = ResponseFormatter.success_response(
+                data=format_batch_response(job_ids, summary),
+                message="Batch jobs created successfully",
+                status_code=202
+            )
 
             logger.info(f"Batch job creation completed: {created_jobs}/{total_files} jobs created")
             return response, 202  # 202 Accepted
@@ -343,29 +270,13 @@ class OCRController:
         try:
             status = self.job_service.get_job_status(job_id)
 
-            if status.get('status') == 'error':
-                return status, 500
-
-            # Map Celery states to HTTP status codes
-            celery_state = status.get('status', 'unknown')
-            if celery_state == 'pending':
-                return status, 202  # Accepted
-            elif celery_state == 'started' or celery_state == 'processing':
-                return status, 202  # Accepted
-            elif celery_state == 'success' or celery_state == 'completed':
-                return status, 200  # OK
-            elif celery_state == 'failure' or celery_state == 'failed':
-                return status, 500  # Internal Server Error
-            else:
-                return status, 200  # Default
+            # Use helper for status response formatting
+            response, http_status = create_job_status_response(status)
+            return response, http_status
 
         except Exception as e:
             logger.error(f"Error getting job status: {str(e)}")
-            return {
-                "job_id": job_id,
-                "status": "error",
-                "error": str(e)
-            }, 500
+            return self._create_error_response(ERROR_INTERNAL_SERVER, str(e), 500)
 
     def get_job_result(self, job_id: str) -> tuple[Dict[str, Any], int]:
         """
@@ -380,21 +291,10 @@ class OCRController:
         try:
             result = self.job_service.get_job_result(job_id)
 
-            if result.get('status') == 'error':
-                return result, 500
-
-            if not result.get('ready', False):
-                return result, 202  # Still processing
-
-            if result.get('status') == 'failed':
-                return result, 500
-
-            return result, 200
+            # Use helper for result response formatting
+            response, http_status = create_job_result_response(result)
+            return response, http_status
 
         except Exception as e:
             logger.error(f"Error getting job result: {str(e)}")
-            return {
-                "job_id": job_id,
-                "status": "error",
-                "error": str(e)
-            }, 500
+            return self._create_error_response(ERROR_INTERNAL_SERVER, str(e), 500)

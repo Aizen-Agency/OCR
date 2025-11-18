@@ -47,8 +47,8 @@ class Config:
     MAX_DPI = int(os.getenv('MAX_DPI', 600))
     MIN_DPI = int(os.getenv('MIN_DPI', 72))
 
-    # Performance settings
-    MAX_WORKERS = int(os.getenv('MAX_WORKERS', 4))  # For future async processing
+    # Performance settings - Optimized for 24GB RAM VPS
+    MAX_WORKERS = int(os.getenv('MAX_WORKERS', 2))  # Optimized for 24GB RAM - balance parallelism and memory
     REQUEST_TIMEOUT = int(os.getenv('REQUEST_TIMEOUT', 300))  # 5 minutes
 
     # File size limits
@@ -68,29 +68,37 @@ class Config:
     MIN_CONFIDENCE = float(os.getenv('MIN_CONFIDENCE', 0.0))
 
     # Redis configuration
-    # Use REDIS_URL directly from environment - should include password if required
-    # Format: redis://:password@redis:6379/0 (password will be URL-encoded automatically by redis client)
-    # If REDIS_URL is not set, fallback to constructing from REDIS_PASSWORD for backward compatibility
-    REDIS_URL = os.getenv('REDIS_URL', '')
+    # Support both direct connection parameters and URL-based connection
+    # Direct connection parameters (preferred):
+    REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
+    REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
+    REDIS_USERNAME = os.getenv('REDIS_USERNAME', 'default')
     REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', '')
+    REDIS_DB = int(os.getenv('REDIS_DB', '0'))
     
-    # If REDIS_URL is not set, construct it from REDIS_PASSWORD (backward compatibility)
+    # URL-based connection (fallback for backward compatibility)
+    REDIS_URL = os.getenv('REDIS_URL', '')
+    
+    # Build Redis URL from individual parameters if URL not provided
+    # This ensures backward compatibility and provides URL for Celery
     if not REDIS_URL:
         if REDIS_PASSWORD:
             # URL-encode password to handle special characters (/, =, etc.)
             encoded_password = quote_plus(REDIS_PASSWORD)
-            REDIS_URL = f'redis://:{encoded_password}@redis:6379/0'
+            if REDIS_USERNAME and REDIS_USERNAME != 'default':
+                REDIS_URL = f'redis://{quote_plus(REDIS_USERNAME)}:{encoded_password}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+            else:
+                REDIS_URL = f'redis://:{encoded_password}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
         else:
             # No password - insecure but allows local dev
-            REDIS_URL = 'redis://redis:6379/0'
+            REDIS_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
     
     REDIS_CACHE_TTL = int(os.getenv('REDIS_CACHE_TTL', 3600))  # 1 hour default
 
     # Celery configuration
-    # Use explicit env vars first, then fallback to REDIS_URL
-    # This allows setting REDIS_URL once and having Celery use it automatically
-    # REDIS_URL should include password: redis://:password@redis:6379/0
-    # Password will be automatically URL-encoded if special characters are present
+    # Use centralized Redis connection manager to get connection URL
+    # This ensures both broker and backend use the same authentication credentials
+    # Priority: CELERY_BROKER_URL/CELERY_RESULT_BACKEND env vars > centralized REDIS_URL
     CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', REDIS_URL)
     CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', REDIS_URL)
 
