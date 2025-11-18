@@ -724,6 +724,302 @@ response = requests.post(f'{API_BASE}/ocr/batch', files=files, headers=headers)
 result = response.json()
 ```
 
+### TypeScript/Node.js Client
+
+```typescript
+import axios, { AxiosResponse } from 'axios';
+import FormData from 'form-data';
+import { createReadStream } from 'fs';
+import { promisify } from 'util';
+
+const sleep = promisify(setTimeout);
+
+const API_BASE = 'https://api.eusdr.com'; // or http://localhost:5000 for local
+const API_TOKEN = 'your-api-token-here';
+
+const headers = {
+  'X-Auth-Token': API_TOKEN
+};
+
+// Type definitions
+interface JobResponse {
+  job_id: string;
+  status: 'processing' | 'completed' | 'failed';
+  filename?: string;
+  file_size?: number;
+  message?: string;
+}
+
+interface OCRImageResult {
+  job_id: string;
+  status: 'completed';
+  text: string;
+  lines: Array<{
+    text: string;
+    confidence: number;
+    bbox: number[][];
+  }>;
+  success: boolean;
+  filename: string;
+  file_size: number;
+  cached: boolean;
+}
+
+interface OCRPdfResult {
+  job_id: string;
+  status: 'completed';
+  pages: Array<{
+    page: number;
+    text: string;
+    lines: Array<{
+      text: string;
+      confidence: number;
+      bbox: number[][];
+    }>;
+    success: boolean;
+  }>;
+  full_text: string;
+  total_pages: number;
+  success: boolean;
+  filename: string;
+  file_size: number;
+  processing_dpi: number;
+  cached: boolean;
+}
+
+interface HybridPdfResult {
+  job_id: string;
+  status: 'completed';
+  pages: Array<{
+    page: number;
+    type: 'text' | 'image';
+    text: string;
+    blocks?: Array<{
+      text: string;
+      bbox: number[][];
+      type: string;
+    }>;
+    lines?: Array<{
+      text: string;
+      confidence: number;
+      bbox: number[][];
+    }>;
+    success: boolean;
+    extraction_method: 'direct' | 'ocr';
+  }>;
+  full_text: string;
+  total_pages: number;
+  pages_processed: number;
+  text_pages: number;
+  image_pages: number;
+  success: boolean;
+  filename: string;
+  file_size: number;
+  processing_dpi: number;
+  cached: boolean;
+}
+
+interface HybridPdfOptions {
+  dpi?: number;
+  chunk_size?: number;
+  max_pages?: number;
+}
+
+interface BatchJobResult {
+  jobs: Array<{
+    filename: string;
+    job_id: string;
+    status: 'processing';
+    type: 'image' | 'pdf';
+    file_size: number;
+  }>;
+  summary: {
+    total_files: number;
+    jobs_created: number;
+    failed_files: number;
+    success: boolean;
+  };
+  message: string;
+}
+
+type JobType = 'ocr' | 'pdf';
+type JobResult = OCRImageResult | OCRPdfResult | HybridPdfResult;
+
+// Image OCR
+const ocrImage = async (imagePath: string): Promise<OCRImageResult> => {
+  const formData = new FormData();
+  formData.append('file', createReadStream(imagePath));
+  
+  const { data } = await axios.post<JobResponse>(
+    `${API_BASE}/ocr/image`,
+    formData,
+    {
+      headers: {
+        ...formData.getHeaders(),
+        ...headers
+      }
+    }
+  );
+  
+  return pollForResult(data.job_id, 'ocr') as Promise<OCRImageResult>;
+};
+
+// PDF OCR
+const ocrPdf = async (pdfPath: string, dpi: number = 300): Promise<OCRPdfResult> => {
+  const formData = new FormData();
+  formData.append('file', createReadStream(pdfPath));
+  
+  const { data } = await axios.post<JobResponse>(
+    `${API_BASE}/ocr/pdf?dpi=${dpi}`,
+    formData,
+    {
+      headers: {
+        ...formData.getHeaders(),
+        ...headers
+      }
+    }
+  );
+  
+  return pollForResult(data.job_id, 'ocr') as Promise<OCRPdfResult>;
+};
+
+// Hybrid PDF Extraction (recommended for mixed PDFs)
+const hybridPdfExtract = async (
+  pdfPath: string,
+  options: HybridPdfOptions = {}
+): Promise<HybridPdfResult> => {
+  const { dpi = 300, chunk_size = 50 } = options;
+  const formData = new FormData();
+  formData.append('file', createReadStream(pdfPath));
+  formData.append('dpi', dpi.toString());
+  formData.append('chunk_size', chunk_size.toString());
+  
+  const { data } = await axios.post<JobResponse>(
+    `${API_BASE}/pdf/hybrid-extract`,
+    formData,
+    {
+      headers: {
+        ...formData.getHeaders(),
+        ...headers
+      }
+    }
+  );
+  
+  return pollForResult(data.job_id, 'pdf') as Promise<HybridPdfResult>;
+};
+
+// Batch processing
+const batchOcr = async (filePaths: string[]): Promise<BatchJobResult> => {
+  const formData = new FormData();
+  
+  filePaths.forEach(filePath => {
+    formData.append('files', createReadStream(filePath));
+  });
+  
+  const { data } = await axios.post<BatchJobResult>(
+    `${API_BASE}/ocr/batch`,
+    formData,
+    {
+      headers: {
+        ...formData.getHeaders(),
+        ...headers
+      }
+    }
+  );
+  
+  return data;
+};
+
+// Poll for job result
+const pollForResult = async (
+  jobId: string,
+  type: JobType = 'ocr',
+  maxAttempts: number = 60,
+  pollInterval: number = 5000
+): Promise<JobResult> => {
+  const endpoint = type === 'pdf' ? 'pdf' : 'ocr';
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { data: statusData } = await axios.get<JobResponse>(
+      `${API_BASE}/${endpoint}/job/${jobId}`,
+      { headers }
+    );
+    
+    if (statusData.status === 'completed') {
+      const { data: resultData } = await axios.get<JobResult>(
+        `${API_BASE}/${endpoint}/job/${jobId}/result`,
+        { headers }
+      );
+      return resultData;
+    }
+    
+    if (statusData.status === 'failed') {
+      throw new Error(`Job ${jobId} failed`);
+    }
+    
+    await sleep(pollInterval);
+  }
+  
+  throw new Error(`Timeout waiting for job ${jobId} after ${maxAttempts} attempts`);
+};
+
+// Usage examples
+(async () => {
+  try {
+    // Image OCR
+    const imageResult = await ocrImage('./image.jpg');
+    console.log('Image OCR Result:', imageResult.text);
+    
+    // PDF OCR
+    const pdfResult = await ocrPdf('./document.pdf', 300);
+    console.log('PDF OCR Result:', pdfResult.full_text);
+    
+    // Hybrid PDF Extraction
+    const hybridResult = await hybridPdfExtract('./document.pdf', {
+      dpi: 300,
+      chunk_size: 50
+    });
+    console.log('Hybrid PDF Result:', hybridResult.full_text);
+    console.log(
+      `Processed ${hybridResult.text_pages} text pages and ${hybridResult.image_pages} image pages`
+    );
+    
+    // Batch processing
+    const batchResult = await batchOcr(['./image1.jpg', './document.pdf']);
+    console.log('Batch Result:', batchResult);
+  } catch (error) {
+    if (error instanceof Error) {
+      console.error('Error:', error.message);
+    } else {
+      console.error('Unknown error:', error);
+    }
+  }
+})();
+```
+
+**Install dependencies:**
+```bash
+npm install axios form-data
+npm install -D typescript @types/node @types/form-data
+```
+
+**TypeScript configuration (tsconfig.json):**
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "lib": ["ES2020"],
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  }
+}
+```
+
 ### cURL Examples
 
 ```bash
