@@ -28,6 +28,7 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+vps-config.env
 
 # Logs
 *.log
