@@ -17,16 +17,26 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Check if REDIS_PASSWORD is set
-if [ -z "$REDIS_PASSWORD" ]; then
-    echo -e "${YELLOW}Warning: REDIS_PASSWORD not set. Using default (INSECURE - change in production!)${NC}"
-    export REDIS_PASSWORD="${REDIS_PASSWORD:-change-this-redis-password-in-production}"
+# Check if .env file exists
+if [ ! -f ".env" ]; then
+    echo -e "${RED}Error: .env file not found!${NC}"
+    echo "Please create .env file from vps-config.env or env.example"
+    echo "Example: cp vps-config.env .env"
+    echo "Then edit .env with your actual credentials (REDIS_PASSWORD, AUTH_TOKEN, SECRET_KEY, etc.)"
+    exit 1
 fi
 
-# Check if AUTH_TOKEN is set
-if [ -z "$AUTH_TOKEN" ]; then
-    echo -e "${YELLOW}Warning: AUTH_TOKEN not set. Using default token.${NC}"
-    export AUTH_TOKEN="${AUTH_TOKEN:-1QHRD48KoetalQhxg14KwMe1MKjRw7Mbj9BwlBUm74M=}"
+echo -e "${GREEN}✓ .env file found - Docker Compose will load all variables from .env${NC}"
+echo "  All environment variables (REDIS_HOST, REDIS_PASSWORD, AUTH_TOKEN, etc.) will be loaded automatically"
+echo "  No need to export variables manually - docker-compose handles it via env_file: .env"
+
+# Source .env to get AUTH_TOKEN for example commands (optional - just for display)
+# Docker Compose will load .env automatically, this is just for script display purposes
+if [ -f ".env" ]; then
+    # Safely source .env (only export variables, ignore comments and empty lines)
+    set -a
+    source .env 2>/dev/null || true
+    set +a
 fi
 
 # Verify docker compose is available
