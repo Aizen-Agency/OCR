@@ -200,7 +200,7 @@ def process_pdf_chunk(
         redis_svc.store_chunk_result(job_id, chunk_id, chunk_result)
         
         # Final memory cleanup after chunk processing
-        force_memory_cleanup()
+        cleanup_memory(force=False)
 
         logger.info(
             f"Completed chunk {chunk_id} for job {job_id}: "
@@ -225,8 +225,12 @@ def process_pdf_chunk(
         }
     finally:
         # Cleanup memory
-        if ocr_service:
-            ocr_service.cleanup_memory()
+        try:
+            ocr_svc = get_ocr_service()
+            if ocr_svc:
+                ocr_svc.cleanup_memory()
+        except Exception:
+            pass  # Ignore cleanup errors
 
 
 @celery_app.task(bind=True, base=HybridPDFTask, name='tasks.aggregate_pdf_chunks')
@@ -334,7 +338,7 @@ def aggregate_pdf_chunks(
             redis_svc.cleanup_chunk_data(master_job_id)
             
             # Final memory cleanup
-            force_memory_cleanup()
+            cleanup_memory(force=False)
         except Exception as cleanup_error:
             logger.warning(f"Error during cleanup: {str(cleanup_error)}")
 

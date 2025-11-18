@@ -115,6 +115,7 @@ services:
       - PADDLEPADDLE_CACHE_DIR=/tmp/.paddlex
     volumes:
       - ocr_uploads:/tmp/ocr_uploads
+      - ocr_uploads:/tmp/pdf_hybrid_uploads  # Share same volume for PDF hybrid temp files
       - logs_data:/app/logs  # Use named volume instead of bind mount for read-only compatibility
       - paddlex_models:/tmp/.paddlex  # Mount volume at /tmp/.paddlex since HOME=/tmp
     restart: unless-stopped
@@ -181,6 +182,7 @@ services:
     command: celery -A celery_app worker --loglevel=info --concurrency=2  # Optimized for 24GB RAM - balance parallelism and memory
     volumes:
       - ocr_uploads:/tmp/ocr_uploads
+      - ocr_uploads:/tmp/pdf_hybrid_uploads  # Share same volume for PDF hybrid temp files (must match ocr-microservice)
       - logs_data:/app/logs  # Use named volume for consistency
       - paddlex_models:/tmp/.paddlex  # Mount volume at /tmp/.paddlex since HOME=/tmp
     restart: unless-stopped
