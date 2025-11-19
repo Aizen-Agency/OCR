@@ -16,6 +16,7 @@ from utils.constants import (
     ERROR_INVALID_DPI,
     ERROR_FILE_VALIDATION_FAILED,
     ERROR_INTERNAL_SERVER,
+    ERROR_UNSUPPORTED_FILE_TYPE,
     DEFAULT_DPI,
     MIN_DPI,
     MAX_DPI
@@ -66,6 +67,14 @@ class OCRController(BaseController):
                     )
                 return self._create_error_response(ERROR_FILE_VALIDATION_FAILED, "File validation failed", status_code)
 
+            # Validate file type - only images allowed
+            if not is_image_file(filename):
+                return self._create_error_response(
+                    ERROR_UNSUPPORTED_FILE_TYPE,
+                    f"Only image files are allowed. Received: {filename}",
+                    400
+                )
+
             # Read file data using helper
             file_data = self._read_file_data(file)
 
@@ -114,6 +123,14 @@ class OCRController(BaseController):
                         400
                     )
                 return self._create_error_response(ERROR_FILE_VALIDATION_FAILED, "File validation failed", status_code)
+
+            # Validate file type - only PDFs allowed
+            if not is_pdf_file(filename):
+                return self._create_error_response(
+                    ERROR_UNSUPPORTED_FILE_TYPE,
+                    f"Only PDF files are allowed. Received: {filename}",
+                    400
+                )
 
             # Get and validate DPI using helper
             dpi_param = request.args.get('dpi', DEFAULT_DPI)

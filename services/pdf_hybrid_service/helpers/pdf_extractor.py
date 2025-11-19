@@ -61,9 +61,8 @@ def extract_page_content(
                 pix = page.get_pixmap(dpi=dpi, colorspace=fitz.csRGB)
                 png_bytes = pix.tobytes("png")
                 
-                # Free pixmap immediately to release memory
-                pix = None
-                del pix
+                # Note: Don't delete pix here - let finally block handle cleanup
+                # This prevents "referenced before assignment" errors
 
                 # Perform OCR
                 ocr_result = ocr_service.process_image(
@@ -94,7 +93,7 @@ def extract_page_content(
                         "error": ocr_result.get("error", "OCR processing failed")
                     }
             finally:
-                # Ensure pixmap is freed even if OCR fails
+                # Ensure pixmap is freed even if OCR fails or exception occurs
                 if pix is not None:
                     try:
                         pix = None

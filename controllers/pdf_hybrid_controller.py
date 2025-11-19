@@ -17,9 +17,11 @@ from utils.constants import (
     ERROR_INVALID_DPI,
     ERROR_FILE_VALIDATION_FAILED,
     ERROR_INTERNAL_SERVER,
+    ERROR_UNSUPPORTED_FILE_TYPE,
     MIN_DPI
 )
 from utils.validation_helpers import validate_dpi_with_error, extract_int_param
+from utils.file_upload_helpers import is_pdf_file
 from utils.response_helpers import (
     create_hybrid_pdf_job_response,
     create_job_status_response,
@@ -63,6 +65,14 @@ class PDFHybridController(BaseController):
                         400
                     )
                 return self._create_error_response(ERROR_FILE_VALIDATION_FAILED, "File validation failed", status_code)
+
+            # Validate file type - only PDFs allowed
+            if not is_pdf_file(filename):
+                return self._create_error_response(
+                    ERROR_UNSUPPORTED_FILE_TYPE,
+                    f"Only PDF files are allowed. Received: {filename}",
+                    400
+                )
 
             # Parse and validate options using helpers
             # DPI
