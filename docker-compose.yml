@@ -90,6 +90,9 @@ services:
       # Performance Settings
       - MAX_WORKERS=${MAX_WORKERS:-2}
       - REQUEST_TIMEOUT=${REQUEST_TIMEOUT:-300}
+      # Celery Worker Concurrency - Optimized for 24GB RAM VPS
+      # Higher concurrency = more parallel processing (default: 5, recommended: 4-6 for 24GB RAM)
+      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY:-5}
       # Logging Configuration
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_FORMAT=${LOG_FORMAT:-%(asctime)s - %(name)s - %(levelname)s - %(message)s}
@@ -179,7 +182,9 @@ services:
       - XDG_CACHE_HOME=/tmp/.cache
       - TMPDIR=/tmp
       - PADDLEPADDLE_CACHE_DIR=/tmp/.paddlex
-    command: celery -A celery_app worker --loglevel=info --concurrency=2  # Optimized for 24GB RAM - balance parallelism and memory
+      # Celery Worker Concurrency - Optimized for 24GB RAM VPS
+      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY:-5}
+    command: celery -A celery_app worker --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY:-5}  # Optimized for 24GB RAM - configurable via env var (default: 5)
     volumes:
       - ocr_uploads:/tmp/ocr_uploads
       - ocr_uploads:/tmp/pdf_hybrid_uploads  # Share same volume for PDF hybrid temp files (must match ocr-microservice)

@@ -101,6 +101,11 @@ class Config:
     # Priority: CELERY_BROKER_URL/CELERY_RESULT_BACKEND env vars > centralized REDIS_URL
     CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', REDIS_URL)
     CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', REDIS_URL)
+    
+    # Celery worker concurrency - optimized for 24GB RAM VPS
+    # Higher concurrency = more parallel processing but higher memory usage
+    # Recommended: 4-6 for 24GB RAM, 2-3 for 8GB RAM
+    CELERY_WORKER_CONCURRENCY = int(os.getenv('CELERY_WORKER_CONCURRENCY', 5))
 
     # Rate limiting configuration
     RATE_LIMIT_PER_MINUTE = int(os.getenv('RATE_LIMIT_PER_MINUTE', 10))

@@ -54,13 +54,13 @@ celery_app.conf.update(
     task_soft_time_limit=540,  # 9 minutes soft limit
     worker_prefetch_multiplier=1,
     worker_max_tasks_per_child=10,  # Restart worker after 10 tasks to prevent memory leaks
-    worker_concurrency=2,  # Optimized for 24GB RAM VPS - balance parallelism and memory usage
+    worker_concurrency=config.CELERY_WORKER_CONCURRENCY,  # Configurable via CELERY_WORKER_CONCURRENCY env var (default: 5)
     result_expires=3600,  # Results expire after 1 hour
     broker_connection_retry_on_startup=True,  # Retry connection on startup
     broker_connection_retry=True,  # Enable connection retries
     broker_connection_max_retries=100,  # Maximum retry attempts
     broker_connection_retry_delay=1.0,  # Initial retry delay
-    broker_pool_limit=10,  # Connection pool limit
+    broker_pool_limit=20,  # Connection pool limit (increased for better concurrent handling)
     broker_heartbeat=30,  # Heartbeat interval
     broker_transport_options={
         'visibility_timeout': 3600,
@@ -194,5 +194,6 @@ def ensure_result_backend_connection():
 logger.info(f"Celery app configured successfully")
 logger.info(f"  Broker URL: {safe_broker_url}")
 logger.info(f"  Result Backend: {safe_backend_url}")
+logger.info(f"  Worker Concurrency: {config.CELERY_WORKER_CONCURRENCY} (configurable via CELERY_WORKER_CONCURRENCY env var)")
 logger.info("  Redis resilience: Enabled (retry on state changes, connection pooling)")
 logger.info("  Using centralized Redis connection manager for consistent authentication")
