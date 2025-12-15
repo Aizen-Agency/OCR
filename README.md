@@ -172,7 +172,7 @@ The API provides RESTful endpoints organized by blueprints.
 
 **Base URLs:**
 - Local development: `http://localhost:5000`
-- Production: `https://api.eusdr.com` (or your configured domain)
+- Production: `https://api.aizenocr.com` (or your configured domain)
 
 ### Quick Reference
 
@@ -567,17 +567,17 @@ export AUTH_TOKEN="your-api-token-here"
 **Example requests:**
 ```bash
 # OCR Image
-curl -X POST https://api.eusdr.com/ocr/image \
+curl -X POST https://api.aizenocr.com/ocr/image \
   -H "X-Auth-Token: your-api-token-here" \
   -F "file=@image.jpg"
 
 # OCR PDF
-curl -X POST https://api.eusdr.com/ocr/pdf \
+curl -X POST https://api.aizenocr.com/ocr/pdf \
   -H "X-Auth-Token: your-api-token-here" \
   -F "file=@document.pdf"
 
 # Hybrid PDF Extraction
-curl -X POST https://api.eusdr.com/pdf/hybrid-extract \
+curl -X POST https://api.aizenocr.com/pdf/hybrid-extract \
   -H "X-Auth-Token: your-api-token-here" \
   -F "file=@document.pdf" \
   -F "dpi=300"
@@ -637,18 +637,18 @@ OCR results are automatically cached in Redis based on file content hash. Identi
 #### OCR Image Flow
 ```bash
 # 1. Submit image for OCR
-curl -X POST https://api.eusdr.com/ocr/image \
+curl -X POST https://api.aizenocr.com/ocr/image \
   -H "X-Auth-Token: your-api-token-here" \
   -F "file=@image.jpg"
 
 # Response: {"job_id": "abc123", "status": "processing", ...}
 
 # 2. Poll for status (optional)
-curl https://api.eusdr.com/ocr/job/abc123 \
+curl https://api.aizenocr.com/ocr/job/abc123 \
   -H "X-Auth-Token: your-api-token-here"
 
 # 3. Get result when ready
-curl https://api.eusdr.com/ocr/job/abc123/result \
+curl https://api.aizenocr.com/ocr/job/abc123/result \
   -H "X-Auth-Token: your-api-token-here"
 
 # Response: {"status": "completed", "text": "...", "lines": [...], ...}
@@ -657,7 +657,7 @@ curl https://api.eusdr.com/ocr/job/abc123/result \
 #### Hybrid PDF Extraction Flow
 ```bash
 # 1. Submit PDF for hybrid extraction
-curl -X POST https://api.eusdr.com/pdf/hybrid-extract \
+curl -X POST https://api.aizenocr.com/pdf/hybrid-extract \
   -H "X-Auth-Token: your-api-token-here" \
   -F "file=@document.pdf" \
   -F "dpi=300"
@@ -665,13 +665,13 @@ curl -X POST https://api.eusdr.com/pdf/hybrid-extract \
 # Response: {"job_id": "xyz789", "status": "processing", "total_pages": 150, ...}
 
 # 2. Poll for status (shows progress)
-curl https://api.eusdr.com/pdf/job/xyz789 \
+curl https://api.aizenocr.com/pdf/job/xyz789 \
   -H "X-Auth-Token: your-api-token-here"
 
 # Response: {"status": "processing", "progress": {"pages_processed": 75, "total_pages": 150, ...}}
 
 # 3. Get result when ready
-curl https://api.eusdr.com/pdf/job/xyz789/result \
+curl https://api.aizenocr.com/pdf/job/xyz789/result \
   -H "X-Auth-Token: your-api-token-here"
 
 # Response: {"status": "completed", "pages": [...], "full_text": "...", ...}
@@ -684,7 +684,7 @@ curl https://api.eusdr.com/pdf/job/xyz789/result \
 ```python
 import requests
 
-API_BASE = "https://api.eusdr.com"  # or http://localhost:5000 for local
+API_BASE = "https://api.aizenocr.com"  # or http://localhost:5000 for local
 API_TOKEN = "your-api-token-here"
 
 headers = {"X-Auth-Token": API_TOKEN}
@@ -734,7 +734,7 @@ import { promisify } from 'util';
 
 const sleep = promisify(setTimeout);
 
-const API_BASE = 'https://api.eusdr.com'; // or http://localhost:5000 for local
+const API_BASE = 'https://api.aizenocr.com'; // or http://localhost:5000 for local
 const API_TOKEN = 'your-api-token-here';
 
 const headers = {
@@ -1025,7 +1025,7 @@ npm install -D typescript @types/node @types/form-data
 ```bash
 # Set your API token
 export API_TOKEN="your-api-token-here"
-export API_BASE="https://api.eusdr.com"  # or http://localhost:5000 for local
+export API_BASE="https://api.aizenocr.com"  # or http://localhost:5000 for local
 
 # Health check (no auth required)
 curl $API_BASE/health
