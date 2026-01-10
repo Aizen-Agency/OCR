@@ -242,7 +242,13 @@ def process_pdf_chunk(
             pass  # Ignore cleanup errors
 
 
-@celery_app.task(bind=True, base=HybridPDFTask, name='tasks.aggregate_pdf_chunks')
+@celery_app.task(
+    bind=True, 
+    base=HybridPDFTask, 
+    name='tasks.aggregate_pdf_chunks',
+    time_limit=config.CELERY_PDF_AGGREGATE_TIME_LIMIT,  # 4 hours for 5000-page PDFs
+    soft_time_limit=config.CELERY_PDF_AGGREGATE_SOFT_TIME_LIMIT  # 3.5 hours
+)
 def aggregate_pdf_chunks(
     self,
     job_id: str,
@@ -363,7 +369,7 @@ def aggregate_pdf_chunks(
             cleanup_temp_file(pdf_path)
             redis_svc = get_redis_service()
             redis_svc.cleanup_chunk_data(master_job_id)
-            force_memory_cleanup()
+            cleanup_memory(force=True)
         except Exception as cleanup_error:
             logger.warning(f"Error during error cleanup: {str(cleanup_error)}")
 
