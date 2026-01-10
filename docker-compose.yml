@@ -145,6 +145,10 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    # DNS Configuration - Use Google DNS for reliable hostname resolution
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   celery-worker:
     build:
@@ -201,6 +205,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 120s
+    # DNS Configuration - Use Google DNS for reliable hostname resolution
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     networks:
       - ocr_network
     deploy:
@@ -216,6 +224,9 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   # Optional: Add nginx reverse proxy for production
   # To start nginx, use: docker compose --profile production up
