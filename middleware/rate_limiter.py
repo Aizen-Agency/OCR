@@ -38,9 +38,46 @@ class RateLimiter:
         ip = get_client_ip()
         return f"ip:{ip}"
 
+    def _get_dynamic_rate_limit(self, request) -> int:
+        """
+        Get dynamic rate limit based on request type and file size.
+        
+        Args:
+            request: Flask request object
+            
+        Returns:
+            Rate limit per minute
+        """
+        config = self.redis_service.config
+        
+        # Check if this is a PDF upload request
+        if request.method == 'POST' and request.path.startswith('/pdf/'):
+            # Try to estimate PDF size from Content-Length header
+            content_length = request.headers.get('Content-Length')
+            if content_length:
+                try:
+                    file_size_bytes = int(content_length)
+                    file_size_mb = file_size_bytes / (1024 * 1024)
+                    
+                    # Dynamic limits based on PDF size
+                    if file_size_mb > 100:  # Large PDF (>100MB, likely 5000 pages)
+                        return config.RATE_LIMIT_LARGE_PDF
+                    elif file_size_mb > 10:  # Medium PDF (10-100MB)
+                        return config.RATE_LIMIT_MEDIUM_PDF
+                    else:  # Small PDF (<10MB)
+                        return config.RATE_LIMIT_SMALL_PDF
+                except (ValueError, TypeError):
+                    pass
+            
+            # Fallback: use PDF hybrid rate limit
+            return config.PDF_HYBRID_RATE_LIMIT_PER_MINUTE
+        
+        # Default rate limit for other requests
+        return config.RATE_LIMIT_PER_MINUTE
+
     def check_rate_limit(self, request) -> Tuple[bool, Optional[Dict[str, Any]]]:
         """
-        Check if request is within rate limits.
+        Check if request is within rate limits with dynamic limits based on request type.
 
         Args:
             request: Flask request object
@@ -51,19 +88,25 @@ class RateLimiter:
         """
         try:
             client_id = self.get_client_identifier(request)
-            is_allowed, remaining = self.redis_service.check_rate_limit(client_id)
+            
+            # Get dynamic rate limit based on request type
+            rate_limit = self._get_dynamic_rate_limit(request)
+            
+            # Check rate limit with dynamic limit
+            is_allowed, remaining = self.redis_service.check_rate_limit(client_id, limit_per_minute=rate_limit)
 
             if not is_allowed:
                 return False, {
                     "error": "Rate limit exceeded",
-                    "message": f"Too many requests. Limit: {self.redis_service.config.RATE_LIMIT_PER_MINUTE} per minute",
+                    "message": f"Too many requests. Limit: {rate_limit} per minute",
                     "retry_after": 60,
                     "remaining": 0
                 }
 
-            # Add rate limit headers
+            # Add rate limit headers with dynamic limit
             request.rate_limit_remaining = remaining
-            request.rate_limit_total = self.redis_service.config.RATE_LIMIT_PER_MINUTE
+            request.rate_limit_total = rate_limit
+            request.rate_limit_dynamic = rate_limit != self.redis_service.config.RATE_LIMIT_PER_MINUTE
 
             return True, None
 
@@ -113,6 +156,8 @@ def register_rate_limiter(app, redis_service: RedisService) -> None:
     def add_rate_limit_headers(response):
         """Add rate limit headers to all responses."""
         if hasattr(request, 'rate_limit_remaining'):
-            response.headers['X-RateLimit-Limit'] = str(rate_limiter.redis_service.config.RATE_LIMIT_PER_MINUTE)
+            # Use dynamic limit if set, otherwise use default
+            limit = getattr(request, 'rate_limit_total', rate_limiter.redis_service.config.RATE_LIMIT_PER_MINUTE)
+            response.headers['X-RateLimit-Limit'] = str(limit)
             response.headers['X-RateLimit-Remaining'] = str(getattr(request, 'rate_limit_remaining', 0))
         return response

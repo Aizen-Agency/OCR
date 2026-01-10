@@ -201,30 +201,35 @@ class RedisService:
             logger.warning(f"Error caching result: {str(e)}")
             return False
 
-    def check_rate_limit(self, client_id: str) -> Tuple[bool, int]:
+    def check_rate_limit(self, client_id: str, limit_per_minute: int = None) -> Tuple[bool, int]:
         """
         Check and update rate limit for a client.
 
         Args:
             client_id: Unique client identifier (IP address or API key)
+            limit_per_minute: Optional custom rate limit (defaults to config value)
 
         Returns:
             Tuple of (is_allowed, remaining_requests)
         """
+        # Use provided limit or default from config
+        rate_limit = limit_per_minute if limit_per_minute is not None else self.config.RATE_LIMIT_PER_MINUTE
+        
         if not self.is_connected():
             # If Redis is not available, allow all requests
-            return True, self.config.RATE_LIMIT_PER_MINUTE
+            return True, rate_limit
 
         try:
-            rate_limit_key = f"{REDIS_KEY_PREFIX_RATE_LIMIT}{client_id}"
+            # Use client_id + limit to create separate rate limit buckets for different limits
+            rate_limit_key = f"{REDIS_KEY_PREFIX_RATE_LIMIT}{client_id}:{rate_limit}"
             current_count = self.redis_client.incr(rate_limit_key)
             
             # Set expiration on first request
             if current_count == 1:
                 self.redis_client.expire(rate_limit_key, RATE_LIMIT_WINDOW_SECONDS)
 
-            remaining = max(0, self.config.RATE_LIMIT_PER_MINUTE - current_count)
-            is_allowed = current_count <= self.config.RATE_LIMIT_PER_MINUTE
+            remaining = max(0, rate_limit - current_count)
+            is_allowed = current_count <= rate_limit
 
             if not is_allowed:
                 logger.warning(f"Rate limit exceeded for client: {client_id}")

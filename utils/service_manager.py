@@ -30,12 +30,14 @@ class ServiceManager:
     _redis_service = None
     _job_service = None
     _resource_monitor = None
+    _queue_service = None
     
     # Initialization flags
     _ocr_initialized = False
     _redis_initialized = False
     _job_initialized = False
     _resource_monitor_initialized = False
+    _queue_service_initialized = False
     
     def __new__(cls):
         """Ensure singleton pattern."""
@@ -146,6 +148,34 @@ class ServiceManager:
                         self._resource_monitor_initialized = True
         return self._resource_monitor
     
+    def get_queue_service(self):
+        """
+        Get or initialize QueueService instance.
+        
+        Returns:
+            QueueService instance
+        """
+        if self._queue_service is None or not self._queue_service_initialized:
+            with self._lock:
+                if self._queue_service is None or not self._queue_service_initialized:
+                    try:
+                        from services.queue_service import QueueService
+                        redis_service = self.get_redis_service()
+                        resource_monitor = self.get_resource_monitor()
+                        self._queue_service = QueueService(
+                            redis_service=redis_service,
+                            resource_monitor=resource_monitor
+                        )
+                        self._queue_service_initialized = True
+                        logger.info("QueueService initialized via ServiceManager")
+                    except Exception as e:
+                        logger.warning(f"Failed to initialize QueueService: {str(e)}")
+                        # Create without dependencies if unavailable
+                        from services.queue_service import QueueService
+                        self._queue_service = QueueService(redis_service=None, resource_monitor=None)
+                        self._queue_service_initialized = True
+        return self._queue_service
+    
     def reset_ocr_service(self):
         """
         Reset OCR service (useful for testing or reinitialization).
@@ -184,12 +214,14 @@ class ServiceManager:
             self._redis_service = None
             self._job_service = None
             self._resource_monitor = None
+            self._queue_service = None
             
             # Reset flags
             self._ocr_initialized = False
             self._redis_initialized = False
             self._job_initialized = False
             self._resource_monitor_initialized = False
+            self._queue_service_initialized = False
             
             logger.info("ServiceManager cleanup completed")
 
@@ -233,4 +265,9 @@ def get_job_service():
 def get_resource_monitor():
     """Get ResourceMonitor instance via ServiceManager."""
     return get_service_manager().get_resource_monitor()
+
+
+def get_queue_service():
+    """Get QueueService instance via ServiceManager."""
+    return get_service_manager().get_queue_service()
 

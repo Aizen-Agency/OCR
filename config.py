@@ -107,10 +107,33 @@ class Config:
     # Recommended: 4-6 for 24GB RAM, 2-3 for 8GB RAM
     CELERY_WORKER_CONCURRENCY = int(os.getenv('CELERY_WORKER_CONCURRENCY', 5))
 
+    # Celery task time limits (in seconds)
+    # Global defaults for regular OCR tasks (images, small PDFs)
+    CELERY_TASK_TIME_LIMIT = int(os.getenv('CELERY_TASK_TIME_LIMIT', 600))  # 10 minutes hard limit
+    CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv('CELERY_TASK_SOFT_TIME_LIMIT', 540))  # 9 minutes soft limit
+    
+    # PDF Hybrid specific time limits (for large PDFs)
+    # Chunk processing: 50 pages per chunk
+    CELERY_PDF_CHUNK_TIME_LIMIT = int(os.getenv('CELERY_PDF_CHUNK_TIME_LIMIT', 1800))  # 30 minutes
+    CELERY_PDF_CHUNK_SOFT_TIME_LIMIT = int(os.getenv('CELERY_PDF_CHUNK_SOFT_TIME_LIMIT', 1620))  # 27 minutes
+    # Aggregation: waits for all chunks to complete (for 5000-page PDFs)
+    CELERY_PDF_AGGREGATE_TIME_LIMIT = int(os.getenv('CELERY_PDF_AGGREGATE_TIME_LIMIT', 14400))  # 4 hours
+    CELERY_PDF_AGGREGATE_SOFT_TIME_LIMIT = int(os.getenv('CELERY_PDF_AGGREGATE_SOFT_TIME_LIMIT', 12600))  # 3.5 hours
+    PDF_AGGREGATE_MAX_WAIT_TIME = int(os.getenv('PDF_AGGREGATE_MAX_WAIT_TIME', 14400))  # 4 hours max wait for chunks
+
     # Rate limiting configuration
     RATE_LIMIT_PER_MINUTE = int(os.getenv('RATE_LIMIT_PER_MINUTE', 10))
     # Separate rate limit for hybrid PDF endpoint (can be more restrictive)
     PDF_HYBRID_RATE_LIMIT_PER_MINUTE = int(os.getenv('PDF_HYBRID_RATE_LIMIT_PER_MINUTE', 20))
+    
+    # Dynamic rate limiting based on PDF size
+    RATE_LIMIT_SMALL_PDF = int(os.getenv('RATE_LIMIT_SMALL_PDF', 20))  # req/min for <10MB PDFs
+    RATE_LIMIT_MEDIUM_PDF = int(os.getenv('RATE_LIMIT_MEDIUM_PDF', 10))  # req/min for 10-100MB PDFs
+    RATE_LIMIT_LARGE_PDF = int(os.getenv('RATE_LIMIT_LARGE_PDF', 5))  # req/min for >100MB PDFs
+    
+    # Queue management
+    MAX_QUEUE_SIZE = int(os.getenv('MAX_QUEUE_SIZE', 100))  # Max jobs in queue before rejecting
+    QUEUE_REJECTION_ENABLED = os.getenv('QUEUE_REJECTION_ENABLED', 'true').lower() == 'true'  # Enable queue size limits
     
     # API Key Authentication
     # SECURITY: API key required for /ocr/* endpoints (health endpoints excluded)

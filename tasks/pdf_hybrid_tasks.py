@@ -41,6 +41,9 @@ from utils.resource_manager import cleanup_memory
 
 logger = logging.getLogger(__name__)
 
+# Get config instance for time limits
+config = get_config()
+
 # PDF hybrid service instance (not managed by service manager yet)
 pdf_hybrid_service = None
 
@@ -84,7 +87,13 @@ class HybridPDFTask(Task):
         logger.info(f"Task {task_id} completed successfully")
 
 
-@celery_app.task(bind=True, base=HybridPDFTask, name='tasks.process_pdf_chunk')
+@celery_app.task(
+    bind=True, 
+    base=HybridPDFTask, 
+    name='tasks.process_pdf_chunk',
+    time_limit=config.CELERY_PDF_CHUNK_TIME_LIMIT,  # 30 minutes for 50-page chunks
+    soft_time_limit=config.CELERY_PDF_CHUNK_SOFT_TIME_LIMIT  # 27 minutes
+)
 def process_pdf_chunk(
     self,
     pdf_path: str,
@@ -264,7 +273,7 @@ def aggregate_pdf_chunks(
         redis_svc = get_redis_service()
 
         # Poll for all chunk results
-        max_wait_time = 3600  # 1 hour max wait
+        max_wait_time = config.PDF_AGGREGATE_MAX_WAIT_TIME  # Configurable (default: 4 hours for 5000-page PDFs)
         poll_interval = 2  # Check every 2 seconds
         waited = 0
         all_chunks = []

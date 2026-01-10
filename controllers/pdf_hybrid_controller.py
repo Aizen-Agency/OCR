@@ -28,6 +28,7 @@ from utils.response_helpers import (
     create_job_result_response
 )
 from utils.response_formatter import ResponseFormatter
+from utils.service_manager import get_queue_service
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,36 @@ class PDFHybridController(BaseController):
                     f"File size exceeds maximum limit of {max_size_mb}MB",
                     status_code
                 )
+
+            # Check system capacity before accepting job
+            try:
+                queue_service = get_queue_service()
+                file_size_mb = len(file_data) / (1024 * 1024)  # Convert bytes to MB
+                capacity_check = queue_service.can_accept_new_job(estimated_pdf_size_mb=file_size_mb)
+                
+                if not capacity_check.get("can_accept", True):
+                    reason = capacity_check.get("reason", "capacity_exceeded")
+                    message = capacity_check.get("message", "System is at capacity. Please try again later.")
+                    
+                    # Return 503 Service Unavailable
+                    error_response, status_code = self._create_error_response(
+                        "SERVICE_UNAVAILABLE",
+                        message,
+                        503
+                    )
+                    # Add retry-after header suggestion (in minutes)
+                    wait_time = capacity_check.get("estimated_wait_time_minutes", 60)
+                    error_response["retry_after_minutes"] = wait_time
+                    error_response["details"] = capacity_check
+                    
+                    logger.warning(
+                        f"Job rejected due to capacity: {reason} - {message} "
+                        f"(queue_size={capacity_check.get('queue_size', 0)})"
+                    )
+                    return error_response, 503
+            except Exception as e:
+                # If capacity check fails, log warning but allow job (fail open)
+                logger.warning(f"Capacity check failed, allowing job: {str(e)}")
 
             logger.info(
                 f"Creating hybrid PDF job: {filename}, "
