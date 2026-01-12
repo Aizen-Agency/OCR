@@ -70,45 +70,6 @@ def get_pdf_hybrid_service() -> PDFHybridService:
         pdf_hybrid_service = PDFHybridService()
     return pdf_hybrid_service
 
-
-def cleanup_task_resources(pdf_path: str = None, job_id: str = None, force_memory: bool = False) -> None:
-    """
-    Centralized cleanup function for task resources.
-    
-    Args:
-        pdf_path: Optional path to PDF file to clean up
-        job_id: Optional job ID for Redis cleanup
-        force_memory: If True, force immediate memory cleanup
-    """
-    try:
-        # Cleanup temp PDF file if provided
-        if pdf_path:
-            cleanup_temp_file(pdf_path)
-        
-        # Cleanup Redis chunk data if job_id provided
-        if job_id:
-            try:
-                redis_svc = get_redis_service()
-                if redis_svc:
-                    redis_svc.cleanup_chunk_data(job_id)
-            except Exception as redis_error:
-                logger.warning(f"Redis cleanup failed for job {job_id}: {str(redis_error)}")
-        
-        # Memory cleanup
-        cleanup_memory(force=force_memory)
-        
-        # OCR service cleanup
-        try:
-            ocr_svc = get_ocr_service()
-            if ocr_svc:
-                ocr_svc.cleanup_memory()
-        except Exception as ocr_cleanup_error:
-            logger.debug(f"OCR service cleanup failed: {str(ocr_cleanup_error)}")
-            
-    except Exception as cleanup_error:
-        logger.warning(f"Error during resource cleanup: {str(cleanup_error)}")
-        # Don't raise - cleanup errors shouldn't fail the task
-
 # Service access functions now use centralized service manager
 # Imported from utils.service_manager for consistency
 
@@ -272,8 +233,13 @@ def process_pdf_chunk(
             "job_id": job_id
         }
     finally:
-        # Always cleanup resources, even on error
-        cleanup_task_resources(force_memory=False)
+        # Cleanup memory
+        try:
+            ocr_svc = get_ocr_service()
+            if ocr_svc:
+                ocr_svc.cleanup_memory()
+        except Exception:
+            pass  # Ignore cleanup errors
 
 
 @celery_app.task(
@@ -378,12 +344,18 @@ def aggregate_pdf_chunks(
             f"{duration_ms}ms total"
         )
 
-        # Cleanup on success
-        cleanup_task_resources(
-            pdf_path=pdf_path,
-            job_id=master_job_id,
-            force_memory=False
-        )
+        # Cleanup
+        try:
+            # Delete temp PDF file
+            cleanup_temp_file(pdf_path)
+
+            # Cleanup Redis chunk data
+            redis_svc.cleanup_chunk_data(master_job_id)
+            
+            # Final memory cleanup
+            cleanup_memory(force=False)
+        except Exception as cleanup_error:
+            logger.warning(f"Error during cleanup: {str(cleanup_error)}")
 
         return final_result
 
@@ -391,12 +363,15 @@ def aggregate_pdf_chunks(
         logger.error(f"Error in aggregate_pdf_chunks: {str(e)}")
         logger.error(f"Full traceback:\n{traceback.format_exc()}")
         
-        # Cleanup on error - force memory cleanup to free resources
-        cleanup_task_resources(
-            pdf_path=pdf_path,
-            job_id=self.request.id,
-            force_memory=True
-        )
+        # Cleanup on error
+        try:
+            master_job_id = self.request.id
+            cleanup_temp_file(pdf_path)
+            redis_svc = get_redis_service()
+            redis_svc.cleanup_chunk_data(master_job_id)
+            cleanup_memory(force=True)
+        except Exception as cleanup_error:
+            logger.warning(f"Error during error cleanup: {str(cleanup_error)}")
 
         return {
             "job_id": self.request.id,

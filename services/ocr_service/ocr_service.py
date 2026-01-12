@@ -133,33 +133,26 @@ class OCRService:
 
             logger.info(f"Calling PaddleOCR.ocr()...")
             try:
-                # Rely on Celery's time limits for timeout handling
-                # SIGALRM doesn't work reliably in Celery workers and can conflict with Celery's signal handling
-                # Task-specific time limits are set in task decorators (e.g., 30min for PDF chunks, 4hrs for aggregation)
+                import signal
+
+                def timeout_handler(signum, frame):
+                    raise TimeoutError("OCR processing timed out after 30 seconds")
+
+                # Set timeout for OCR call
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(180)  # 30 second timeout
+
                 result = self.ocr.ocr(image_array)
+
+                # Cancel timeout
+                signal.alarm(0)
+
+            except TimeoutError as timeout_error:
+                logger.error(f"OCR call timed out: {str(timeout_error)}")
+                raise RuntimeError("OCR processing timed out - possible infinite loop in PaddleOCR")
             except Exception as ocr_error:
-                error_type = type(ocr_error).__name__
-                error_module = type(ocr_error).__module__
                 logger.error(f"OCR call failed: {str(ocr_error)}")
-                logger.error(f"OCR call exception type: {error_type} (module: {error_module})")
-                
-                # Check if this is a timeout-related exception from Celery/billiard
-                # Celery uses billiard.exceptions.SoftTimeLimitExceeded and TimeLimitExceeded
-                is_timeout = (
-                    'TimeLimit' in error_type or 
-                    'Timeout' in error_type or
-                    'billiard' in error_module or
-                    'SoftTimeLimitExceeded' in error_type or
-                    'TimeLimitExceeded' in error_type
-                )
-                
-                if is_timeout:
-                    logger.warning(
-                        "OCR processing exceeded time limit - this is handled by Celery's timeout mechanism. "
-                        "Task will be terminated by Celery worker."
-                    )
-                    # Re-raise the original exception so Celery can handle it properly
-                    raise
+                logger.error(f"OCR call exception type: {type(ocr_error).__name__}")
                 raise
             logger.warning(f"OCR result type: {type(result)}, length: {len(result) if result else 0}")
             logger.warning(f"OCR result: {result}")  # Force logging at WARNING level
