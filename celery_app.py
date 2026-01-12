@@ -50,8 +50,11 @@ celery_app.conf.update(
     timezone='UTC',
     enable_utc=True,
     task_track_started=True,
-    task_time_limit=config.CELERY_TASK_TIME_LIMIT,  # Configurable via CELERY_TASK_TIME_LIMIT env var (default: 600s = 10 min)
-    task_soft_time_limit=config.CELERY_TASK_SOFT_TIME_LIMIT,  # Configurable via CELERY_TASK_SOFT_TIME_LIMIT env var (default: 540s = 9 min)
+    # Note: Time limits are set per-task via @celery_app.task decorator
+    # This allows different tasks to have different time limits (e.g., PDF chunks need 30min, aggregation needs 4hrs)
+    # Global defaults are only used as fallback for tasks without explicit limits
+    task_time_limit=config.CELERY_TASK_TIME_LIMIT,  # Fallback default (tasks can override)
+    task_soft_time_limit=config.CELERY_TASK_SOFT_TIME_LIMIT,  # Fallback default (tasks can override)
     worker_prefetch_multiplier=1,
     worker_max_tasks_per_child=10,  # Restart worker after 10 tasks to prevent memory leaks
     worker_concurrency=config.CELERY_WORKER_CONCURRENCY,  # Configurable via CELERY_WORKER_CONCURRENCY env var (default: 5)
