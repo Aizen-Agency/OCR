@@ -20,6 +20,7 @@ os.environ['PADDLEPADDLE_CACHE_DIR'] = paddle_cache_dir
 os.environ['XDG_CACHE_HOME'] = '/tmp/.cache'
 
 from celery_app import celery_app
+from config import get_config
 from services.ocr_service.ocr_service import OCRService
 from services.redis_service import RedisService
 from utils.encoding import decode_base64, generate_file_hash
@@ -194,7 +195,13 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
         ocr_svc.cleanup_memory()
 
 
-@celery_app.task(bind=True, base=OCRTask, name='tasks.process_pdf_task')
+@celery_app.task(
+    bind=True, 
+    base=OCRTask, 
+    name='tasks.process_pdf_task',
+    time_limit=get_config().CELERY_PDF_CHUNK_TIME_LIMIT,  # 30 minutes for full PDF
+    soft_time_limit=get_config().CELERY_PDF_CHUNK_SOFT_TIME_LIMIT  # 27 minutes
+)
 def process_pdf_task(self, pdf_data_b64: str, filename: str = "", dpi: int = 300) -> Dict[str, Any]:
     """
     Process a PDF file for OCR asynchronously.
