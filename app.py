@@ -59,7 +59,7 @@ def create_app(config_name: str = None) -> Flask:
     _register_blueprints(app)
     _register_error_handlers(app)
     _register_auth_middleware(app)  # Register API key authentication
-    _register_rate_limiter(app)
+    # _register_rate_limiter(app)
     _register_cleanup_handlers(app)  # Register cleanup on shutdown
 
     # Log app creation
