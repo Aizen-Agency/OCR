@@ -149,26 +149,41 @@ class ServiceManager:
         print("ServiceManager.get_resource_monitor: Starting", file=sys.stderr, flush=True)
         if self._resource_monitor is None or not self._resource_monitor_initialized:
             print("ServiceManager.get_resource_monitor: ResourceMonitor not initialized, creating", file=sys.stderr, flush=True)
+            print("ServiceManager.get_resource_monitor: Acquiring lock...", file=sys.stderr, flush=True)
             with self._lock:
+                print("ServiceManager.get_resource_monitor: Lock acquired", file=sys.stderr, flush=True)
                 if self._resource_monitor is None or not self._resource_monitor_initialized:
                     try:
                         print("ServiceManager.get_resource_monitor: Importing ResourceMonitor", file=sys.stderr, flush=True)
                         from services.resource_monitor import ResourceMonitor
-                        print("ServiceManager.get_resource_monitor: Getting redis_service (THIS MAY HANG)", file=sys.stderr, flush=True)
-                        redis_service = self.get_redis_service()
+                        print("ServiceManager.get_resource_monitor: ResourceMonitor imported", file=sys.stderr, flush=True)
+                        print("ServiceManager.get_resource_monitor: Getting redis_service (using existing instance to avoid deadlock)", file=sys.stderr, flush=True)
+                        # Use existing redis_service if available to avoid deadlock (we already hold the lock)
+                        # Don't call get_redis_service() which would try to acquire the lock again
+                        redis_service = self._redis_service if self._redis_initialized else None
+                        if redis_service is None:
+                            print("ServiceManager.get_resource_monitor: No existing redis_service, creating without lock", file=sys.stderr, flush=True)
+                            # Release lock temporarily to get redis service
+                            # Actually, just create ResourceMonitor without Redis to avoid deadlock
+                            redis_service = None
                         print("ServiceManager.get_resource_monitor: redis_service obtained", file=sys.stderr, flush=True)
                         print("ServiceManager.get_resource_monitor: Creating ResourceMonitor instance", file=sys.stderr, flush=True)
                         self._resource_monitor = ResourceMonitor(redis_service=redis_service)
+                        print("ServiceManager.get_resource_monitor: ResourceMonitor instance created", file=sys.stderr, flush=True)
                         self._resource_monitor_initialized = True
                         print("ServiceManager.get_resource_monitor: ResourceMonitor initialized", file=sys.stderr, flush=True)
                         logger.info("ResourceMonitor initialized via ServiceManager")
                     except Exception as e:
                         print(f"ServiceManager.get_resource_monitor: Failed to initialize: {str(e)}", file=sys.stderr, flush=True)
+                        import traceback
+                        print(traceback.format_exc(), file=sys.stderr, flush=True)
                         logger.warning(f"Failed to initialize ResourceMonitor: {str(e)}")
                         # Create without Redis if Redis unavailable
                         from services.resource_monitor import ResourceMonitor
                         self._resource_monitor = ResourceMonitor(redis_service=None)
                         self._resource_monitor_initialized = True
+                else:
+                    print("ServiceManager.get_resource_monitor: ResourceMonitor already initialized (double-check)", file=sys.stderr, flush=True)
         else:
             print("ServiceManager.get_resource_monitor: Returning existing resource monitor", file=sys.stderr, flush=True)
         return self._resource_monitor
@@ -189,11 +204,20 @@ class ServiceManager:
                     try:
                         print("ServiceManager.get_queue_service: Importing QueueService", file=sys.stderr, flush=True)
                         from services.queue_service import QueueService
-                        print("ServiceManager.get_queue_service: Getting redis_service (THIS MAY HANG)", file=sys.stderr, flush=True)
-                        redis_service = self.get_redis_service()
+                        print("ServiceManager.get_queue_service: Getting redis_service (using existing to avoid deadlock)", file=sys.stderr, flush=True)
+                        # Use existing redis_service if available to avoid deadlock (we already hold the lock)
+                        redis_service = self._redis_service if self._redis_initialized else None
+                        if redis_service is None:
+                            print("ServiceManager.get_queue_service: No existing redis_service, will create QueueService without Redis", file=sys.stderr, flush=True)
                         print("ServiceManager.get_queue_service: redis_service obtained", file=sys.stderr, flush=True)
-                        print("ServiceManager.get_queue_service: Getting resource_monitor (THIS MAY HANG)", file=sys.stderr, flush=True)
-                        resource_monitor = self.get_resource_monitor()
+                        print("ServiceManager.get_queue_service: Getting resource_monitor (using existing to avoid deadlock)", file=sys.stderr, flush=True)
+                        # Use existing resource_monitor if available to avoid deadlock
+                        resource_monitor = self._resource_monitor if self._resource_monitor_initialized else None
+                        if resource_monitor is None:
+                            print("ServiceManager.get_queue_service: No existing resource_monitor, creating without lock", file=sys.stderr, flush=True)
+                            # Create ResourceMonitor without Redis to avoid deadlock
+                            from services.resource_monitor import ResourceMonitor
+                            resource_monitor = ResourceMonitor(redis_service=redis_service)
                         print("ServiceManager.get_queue_service: resource_monitor obtained", file=sys.stderr, flush=True)
                         print("ServiceManager.get_queue_service: Creating QueueService instance", file=sys.stderr, flush=True)
                         self._queue_service = QueueService(
