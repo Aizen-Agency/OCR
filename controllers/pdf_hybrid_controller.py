@@ -87,15 +87,18 @@ class PDFHybridController(BaseController):
                 return self._create_error_response(ERROR_FILE_VALIDATION_FAILED, "File validation failed", status_code)
 
             # Validate file type - only PDFs allowed
+            print("process_hybrid_pdf: Validating file type", file=sys.stderr, flush=True)
             if not is_pdf_file(filename):
                 return self._create_error_response(
                     ERROR_UNSUPPORTED_FILE_TYPE,
                     f"Only PDF files are allowed. Received: {filename}",
                     400
                 )
+            print("process_hybrid_pdf: File type validated", file=sys.stderr, flush=True)
 
             # Parse and validate options using helpers
             # DPI
+            print("process_hybrid_pdf: Parsing DPI parameter", file=sys.stderr, flush=True)
             dpi_param = request.form.get('dpi') or request.args.get('dpi', self.config.PDF_HYBRID_DEFAULT_DPI)
             is_valid_dpi, dpi, dpi_error = validate_dpi_with_error(
                 dpi_param,
@@ -109,8 +112,10 @@ class PDFHybridController(BaseController):
                     dpi_error or f"DPI must be between {MIN_DPI} and {self.config.PDF_HYBRID_MAX_DPI}",
                     400
                 )
+            print(f"process_hybrid_pdf: DPI validated: {dpi}", file=sys.stderr, flush=True)
 
             # Chunk size
+            print("process_hybrid_pdf: Parsing chunk_size parameter", file=sys.stderr, flush=True)
             chunk_size, chunk_error = extract_int_param(
                 'chunk_size',
                 self.config.PDF_HYBRID_DEFAULT_CHUNK_SIZE,
@@ -118,8 +123,10 @@ class PDFHybridController(BaseController):
             )
             if chunk_error:
                 chunk_size = self.config.PDF_HYBRID_DEFAULT_CHUNK_SIZE
+            print(f"process_hybrid_pdf: Chunk size: {chunk_size}", file=sys.stderr, flush=True)
 
             # Max pages
+            print("process_hybrid_pdf: Parsing max_pages parameter", file=sys.stderr, flush=True)
             max_pages, pages_error = extract_int_param(
                 'max_pages',
                 self.config.PDF_HYBRID_MAX_PAGES,
@@ -127,13 +134,17 @@ class PDFHybridController(BaseController):
             )
             if pages_error:
                 max_pages = self.config.PDF_HYBRID_MAX_PAGES
+            print(f"process_hybrid_pdf: Max pages: {max_pages}", file=sys.stderr, flush=True)
 
             # Read file data using helper
+            print("process_hybrid_pdf: Reading file data (THIS MAY TAKE TIME FOR LARGE FILES)", file=sys.stderr, flush=True)
             logger.info("process_hybrid_pdf: Reading file data")
             file_data = self._read_file_data(file)
+            print(f"process_hybrid_pdf: File data read, size={len(file_data)} bytes", file=sys.stderr, flush=True)
             logger.info(f"process_hybrid_pdf: File data read, size={len(file_data)} bytes")
 
             # Validate file size using helper
+            print("process_hybrid_pdf: Validating file size", file=sys.stderr, flush=True)
             logger.info("process_hybrid_pdf: Validating file size")
             is_valid, status_code = self._validate_file_size(file_data)
             if not is_valid:
@@ -143,12 +154,16 @@ class PDFHybridController(BaseController):
                     f"File size exceeds maximum limit of {max_size_mb}MB",
                     status_code
                 )
+            print("process_hybrid_pdf: File size validated", file=sys.stderr, flush=True)
 
             # Check system capacity before accepting job
+            print("process_hybrid_pdf: Checking system capacity", file=sys.stderr, flush=True)
             try:
                 queue_service = get_queue_service()
                 file_size_mb = len(file_data) / (1024 * 1024)  # Convert bytes to MB
+                print(f"process_hybrid_pdf: File size: {file_size_mb:.2f} MB", file=sys.stderr, flush=True)
                 capacity_check = queue_service.can_accept_new_job(estimated_pdf_size_mb=file_size_mb)
+                print(f"process_hybrid_pdf: Capacity check result: {capacity_check.get('can_accept', False)}", file=sys.stderr, flush=True)
                 
                 if not capacity_check.get("can_accept", True):
                     reason = capacity_check.get("reason", "capacity_exceeded")
@@ -172,8 +187,13 @@ class PDFHybridController(BaseController):
                     return error_response, 503
             except Exception as e:
                 # If capacity check fails, log warning but allow job (fail open)
+                print(f"process_hybrid_pdf: Capacity check failed, allowing job: {str(e)}", file=sys.stderr, flush=True)
                 logger.warning(f"Capacity check failed, allowing job: {str(e)}")
 
+            print(
+                f"process_hybrid_pdf: Creating hybrid PDF job: {filename}, "
+                f"dpi={dpi}, chunk_size={chunk_size}, max_pages={max_pages}", file=sys.stderr, flush=True
+            )
             logger.info(
                 f"Creating hybrid PDF job: {filename}, "
                 f"dpi={dpi}, chunk_size={chunk_size}, max_pages={max_pages}"
@@ -188,8 +208,10 @@ class PDFHybridController(BaseController):
                 "image_area_threshold": self.config.PDF_HYBRID_IMAGE_AREA_THRESHOLD
             }
 
+            print("process_hybrid_pdf: Calling job_service.create_hybrid_pdf_job (THIS IS WHERE PDF PARSING HAPPENS - MAY TAKE TIME)", file=sys.stderr, flush=True)
             logger.info("process_hybrid_pdf: Calling job_service.create_hybrid_pdf_job (this may take time for PDF parsing)")
             job_id = self.job_service.create_hybrid_pdf_job(file_data, filename, options)
+            print(f"process_hybrid_pdf: Job created successfully, job_id={job_id}", file=sys.stderr, flush=True)
             logger.info(f"process_hybrid_pdf: Job created successfully, job_id={job_id}")
 
             # Get progress info (may not be available immediately)
