@@ -31,9 +31,19 @@ def hybrid_extract():
         - max_pages (int, default: 5000)
     Returns: JSON with job_id and status
     """
-    controller = get_pdf_hybrid_controller()
-    result, status_code = controller.process_hybrid_pdf()
-    return jsonify(result), status_code
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Hybrid extract endpoint called - request received")
+    
+    try:
+        controller = get_pdf_hybrid_controller()
+        logger.info("Controller obtained, calling process_hybrid_pdf")
+        result, status_code = controller.process_hybrid_pdf()
+        logger.info(f"process_hybrid_pdf completed with status {status_code}")
+        return jsonify(result), status_code
+    except Exception as e:
+        logger.error(f"Exception in hybrid_extract route: {str(e)}", exc_info=True)
+        raise
 
 
 @pdf_hybrid_bp.route('/job/<job_id>', methods=['GET'])

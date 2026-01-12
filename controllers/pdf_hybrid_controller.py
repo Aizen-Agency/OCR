@@ -55,9 +55,12 @@ class PDFHybridController(BaseController):
         Returns:
             tuple: (response_dict with job_id, status_code)
         """
+        logger.info("process_hybrid_pdf: Starting request processing")
         try:
             # Validate file upload using helper
+            logger.info("process_hybrid_pdf: Validating file upload")
             file, filename, status_code = self._validate_file_upload('file')
+            logger.info(f"process_hybrid_pdf: File upload validation complete, status={status_code}, filename={filename}")
             if status_code != 200:
                 if status_code == 400:
                     return self._create_error_response(
@@ -110,9 +113,12 @@ class PDFHybridController(BaseController):
                 max_pages = self.config.PDF_HYBRID_MAX_PAGES
 
             # Read file data using helper
+            logger.info("process_hybrid_pdf: Reading file data")
             file_data = self._read_file_data(file)
+            logger.info(f"process_hybrid_pdf: File data read, size={len(file_data)} bytes")
 
             # Validate file size using helper
+            logger.info("process_hybrid_pdf: Validating file size")
             is_valid, status_code = self._validate_file_size(file_data)
             if not is_valid:
                 max_size_mb = self._get_max_file_size_mb()
@@ -166,7 +172,9 @@ class PDFHybridController(BaseController):
                 "image_area_threshold": self.config.PDF_HYBRID_IMAGE_AREA_THRESHOLD
             }
 
+            logger.info("process_hybrid_pdf: Calling job_service.create_hybrid_pdf_job (this may take time for PDF parsing)")
             job_id = self.job_service.create_hybrid_pdf_job(file_data, filename, options)
+            logger.info(f"process_hybrid_pdf: Job created successfully, job_id={job_id}")
 
             # Get progress info (may not be available immediately)
             progress = None
