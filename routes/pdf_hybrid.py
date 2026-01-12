@@ -32,10 +32,23 @@ def hybrid_extract():
     Returns: JSON with job_id and status
     """
     import logging
+    import sys
     logger = logging.getLogger(__name__)
+    
+    # Force flush to ensure logs appear immediately
+    print("=" * 80, file=sys.stderr, flush=True)
+    print("HYBRID EXTRACT ENDPOINT CALLED - REQUEST RECEIVED", file=sys.stderr, flush=True)
+    print("=" * 80, file=sys.stderr, flush=True)
+    logger.info("=" * 80)
     logger.info("Hybrid extract endpoint called - request received")
+    logger.info(f"Request method: {request.method}")
+    logger.info(f"Request path: {request.path}")
+    logger.info(f"Request content type: {request.content_type}")
+    logger.info(f"Request content length: {request.content_length}")
+    logger.info("=" * 80)
     
     try:
+        logger.info("Getting controller instance...")
         controller = get_pdf_hybrid_controller()
         logger.info("Controller obtained, calling process_hybrid_pdf")
         result, status_code = controller.process_hybrid_pdf()
@@ -43,6 +56,7 @@ def hybrid_extract():
         return jsonify(result), status_code
     except Exception as e:
         logger.error(f"Exception in hybrid_extract route: {str(e)}", exc_info=True)
+        print(f"EXCEPTION IN HYBRID EXTRACT: {str(e)}", file=sys.stderr, flush=True)
         raise
 
 
