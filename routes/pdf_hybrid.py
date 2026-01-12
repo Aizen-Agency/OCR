@@ -39,24 +39,32 @@ def hybrid_extract():
     print("=" * 80, file=sys.stderr, flush=True)
     print("HYBRID EXTRACT ENDPOINT CALLED - REQUEST RECEIVED", file=sys.stderr, flush=True)
     print("=" * 80, file=sys.stderr, flush=True)
-    logger.info("=" * 80)
-    logger.info("Hybrid extract endpoint called - request received")
-    logger.info(f"Request method: {request.method}")
-    logger.info(f"Request path: {request.path}")
-    logger.info(f"Request content type: {request.content_type}")
-    logger.info(f"Request content length: {request.content_length}")
-    logger.info("=" * 80)
     
     try:
-        logger.info("Getting controller instance...")
+        print("STEP 1: Accessing request.method", file=sys.stderr, flush=True)
+        method = request.method
+        print(f"STEP 1 DONE: method={method}", file=sys.stderr, flush=True)
+        
+        print("STEP 2: Accessing request.path", file=sys.stderr, flush=True)
+        path = request.path
+        print(f"STEP 2 DONE: path={path}", file=sys.stderr, flush=True)
+        
+        print("STEP 3: Getting controller instance", file=sys.stderr, flush=True)
         controller = get_pdf_hybrid_controller()
-        logger.info("Controller obtained, calling process_hybrid_pdf")
+        print("STEP 3 DONE: Controller obtained", file=sys.stderr, flush=True)
+        
+        print("STEP 4: Calling process_hybrid_pdf", file=sys.stderr, flush=True)
         result, status_code = controller.process_hybrid_pdf()
-        logger.info(f"process_hybrid_pdf completed with status {status_code}")
+        print(f"STEP 4 DONE: process_hybrid_pdf completed with status {status_code}", file=sys.stderr, flush=True)
+        
+        print("STEP 5: Returning response", file=sys.stderr, flush=True)
         return jsonify(result), status_code
     except Exception as e:
-        logger.error(f"Exception in hybrid_extract route: {str(e)}", exc_info=True)
         print(f"EXCEPTION IN HYBRID EXTRACT: {str(e)}", file=sys.stderr, flush=True)
+        print(f"Exception type: {type(e).__name__}", file=sys.stderr, flush=True)
+        import traceback
+        print(traceback.format_exc(), file=sys.stderr, flush=True)
+        logger.error(f"Exception in hybrid_extract route: {str(e)}", exc_info=True)
         raise
 
 

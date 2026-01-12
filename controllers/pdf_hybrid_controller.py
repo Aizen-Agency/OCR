@@ -43,10 +43,22 @@ class PDFHybridController(BaseController):
 
     def __init__(self):
         """Initialize PDF hybrid controller with services from service manager."""
+        import sys
+        print("PDFHybridController.__init__: Starting", file=sys.stderr, flush=True)
         super().__init__()
+        print("PDFHybridController.__init__: BaseController initialized", file=sys.stderr, flush=True)
+        
+        print("PDFHybridController.__init__: Getting job_service", file=sys.stderr, flush=True)
         self.job_service = self.service_manager.get_job_service()
+        print("PDFHybridController.__init__: job_service obtained", file=sys.stderr, flush=True)
+        
+        print("PDFHybridController.__init__: Getting redis_service", file=sys.stderr, flush=True)
         self.redis_service = self.service_manager.get_redis_service()
+        print("PDFHybridController.__init__: redis_service obtained", file=sys.stderr, flush=True)
+        
+        print("PDFHybridController.__init__: Getting config", file=sys.stderr, flush=True)
         self.config = get_config()
+        print("PDFHybridController.__init__: Config obtained, initialization complete", file=sys.stderr, flush=True)
 
     def process_hybrid_pdf(self) -> tuple[Dict[str, Any], int]:
         """
