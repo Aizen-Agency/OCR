@@ -143,7 +143,7 @@ def _register_services(app: Flask) -> None:
         # Initialize services via service manager (lazy initialization)
         redis_service = service_manager.get_redis_service()
         job_service = service_manager.get_job_service()
-        ocr_service = OCRService()
+        ocr_service = service_manager.get_ocr_service()
         
         # Store service instances in app context for backward compatibility
         # Controllers now use service manager internally, but some code may still access app.ocr_service
