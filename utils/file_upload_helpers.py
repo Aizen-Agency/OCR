@@ -26,17 +26,27 @@ def validate_file_upload(file_field: str = 'file') -> Tuple[Optional[FileStorage
                Returns (None, None, status_code) on error
                Returns (file, filename, 200) on success
     """
+    import sys
+    print(f"validate_file_upload: Checking request.files for field '{file_field}'", file=sys.stderr, flush=True)
+    
     # Check if file was uploaded
+    # THIS IS WHERE IT MIGHT HANG - accessing request.files triggers Flask to parse multipart form data
+    print("validate_file_upload: Accessing request.files (this may block if body is still streaming)", file=sys.stderr, flush=True)
     if file_field not in request.files:
+        print(f"validate_file_upload: Field '{file_field}' not found in request.files", file=sys.stderr, flush=True)
         return None, None, 400
     
+    print("validate_file_upload: Field found, getting file object", file=sys.stderr, flush=True)
     file = request.files[file_field]
     
     if file.filename == '':
+        print("validate_file_upload: Filename is empty", file=sys.stderr, flush=True)
         return None, None, 400
     
     # Secure filename
+    print(f"validate_file_upload: Securing filename: {file.filename}", file=sys.stderr, flush=True)
     filename = secure_filename(file.filename)
+    print(f"validate_file_upload: Success, returning file and filename", file=sys.stderr, flush=True)
     
     return file, filename, 200
 

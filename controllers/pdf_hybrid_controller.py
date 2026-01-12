@@ -67,11 +67,15 @@ class PDFHybridController(BaseController):
         Returns:
             tuple: (response_dict with job_id, status_code)
         """
+        import sys
+        print("process_hybrid_pdf: Starting request processing", file=sys.stderr, flush=True)
         logger.info("process_hybrid_pdf: Starting request processing")
         try:
             # Validate file upload using helper
+            print("process_hybrid_pdf: About to call _validate_file_upload (this accesses request.files)", file=sys.stderr, flush=True)
             logger.info("process_hybrid_pdf: Validating file upload")
             file, filename, status_code = self._validate_file_upload('file')
+            print(f"process_hybrid_pdf: File upload validation complete, status={status_code}, filename={filename}", file=sys.stderr, flush=True)
             logger.info(f"process_hybrid_pdf: File upload validation complete, status={status_code}, filename={filename}")
             if status_code != 200:
                 if status_code == 400:
