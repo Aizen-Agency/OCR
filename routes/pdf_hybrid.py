@@ -2,7 +2,7 @@
 PDF Hybrid Blueprint - Routes for hybrid PDF text extraction operations
 """
 
-from flask import Blueprint, jsonify, current_app
+from flask import Blueprint, jsonify, current_app, request
 from controllers.pdf_hybrid_controller import PDFHybridController
 
 # Create blueprint
