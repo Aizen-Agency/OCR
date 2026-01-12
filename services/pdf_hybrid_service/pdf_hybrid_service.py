@@ -118,7 +118,6 @@ class PDFHybridService:
             
             # Validate PDF file size first
             max_size = self.config.MAX_PDF_SIZE
-            logger.info(f"create_hybrid_job: Validating PDF file size (max={max_size} bytes)")
             is_valid_size, size_error = validate_pdf_file_size(pdf_data, max_size)
             if not is_valid_size:
                 raise PDFValidationError(size_error or "Invalid PDF file size")
@@ -129,7 +128,6 @@ class PDFHybridService:
             logger.info("create_hybrid_job: Opening PDF document (this may take time for large/corrupted PDFs)")
             try:
                 with pdf_document_context(pdf_data=pdf_data) as doc:
-                    logger.info("create_hybrid_job: PDF document opened, counting pages")
                     page_count = len(doc)
                     logger.info(f"create_hybrid_job: PDF has {page_count} pages")
                     

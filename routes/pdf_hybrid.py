@@ -31,41 +31,9 @@ def hybrid_extract():
         - max_pages (int, default: 5000)
     Returns: JSON with job_id and status
     """
-    import logging
-    import sys
-    logger = logging.getLogger(__name__)
-    
-    # Force flush to ensure logs appear immediately
-    print("=" * 80, file=sys.stderr, flush=True)
-    print("HYBRID EXTRACT ENDPOINT CALLED - REQUEST RECEIVED", file=sys.stderr, flush=True)
-    print("=" * 80, file=sys.stderr, flush=True)
-    
-    try:
-        print("STEP 1: Accessing request.method", file=sys.stderr, flush=True)
-        method = request.method
-        print(f"STEP 1 DONE: method={method}", file=sys.stderr, flush=True)
-        
-        print("STEP 2: Accessing request.path", file=sys.stderr, flush=True)
-        path = request.path
-        print(f"STEP 2 DONE: path={path}", file=sys.stderr, flush=True)
-        
-        print("STEP 3: Getting controller instance", file=sys.stderr, flush=True)
-        controller = get_pdf_hybrid_controller()
-        print("STEP 3 DONE: Controller obtained", file=sys.stderr, flush=True)
-        
-        print("STEP 4: Calling process_hybrid_pdf", file=sys.stderr, flush=True)
-        result, status_code = controller.process_hybrid_pdf()
-        print(f"STEP 4 DONE: process_hybrid_pdf completed with status {status_code}", file=sys.stderr, flush=True)
-        
-        print("STEP 5: Returning response", file=sys.stderr, flush=True)
-        return jsonify(result), status_code
-    except Exception as e:
-        print(f"EXCEPTION IN HYBRID EXTRACT: {str(e)}", file=sys.stderr, flush=True)
-        print(f"Exception type: {type(e).__name__}", file=sys.stderr, flush=True)
-        import traceback
-        print(traceback.format_exc(), file=sys.stderr, flush=True)
-        logger.error(f"Exception in hybrid_extract route: {str(e)}", exc_info=True)
-        raise
+    controller = get_pdf_hybrid_controller()
+    result, status_code = controller.process_hybrid_pdf()
+    return jsonify(result), status_code
 
 
 @pdf_hybrid_bp.route('/job/<job_id>', methods=['GET'])
