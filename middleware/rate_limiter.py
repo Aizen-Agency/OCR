@@ -140,6 +140,11 @@ def register_rate_limiter(app, redis_service: RedisService) -> None:
         ):
             return None
 
+        # Skip rate limiting for /pdf endpoints (PDF processing is already rate-limited by file size and processing time)
+        # This prevents Redis blocking during PDF upload/validation
+        if request.path.startswith('/pdf'):
+            return None
+
         is_allowed, error_response = rate_limiter.check_rate_limit(request)
 
         if not is_allowed:

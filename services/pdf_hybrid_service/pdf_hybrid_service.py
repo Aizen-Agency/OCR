@@ -6,6 +6,7 @@ import os
 import logging
 import uuid
 import time
+import signal
 from typing import Dict, Any, List, Tuple, Optional
 from pathlib import Path
 
@@ -124,30 +125,61 @@ class PDFHybridService:
                 raise PDFValidationError(size_error or "Invalid PDF file size")
             
             # Validate PDF using context manager for automatic cleanup
-            # Wrap in try-except to catch any parsing errors that could cause hangs
+            # Add timeout to prevent hanging on corrupted or complex PDFs
             logger.info("create_hybrid_job: Opening PDF document (this may take time for large/corrupted PDFs)")
+            
+            def timeout_handler(signum, frame):
+                raise TimeoutError("PDF parsing timed out after 30 seconds")
+            
+            # Set up 30 second timeout for PDF parsing
+            old_handler = None
             try:
-                with pdf_document_context(pdf_data=pdf_data) as doc:
-                    logger.info("create_hybrid_job: PDF document opened, counting pages")
-                    page_count = len(doc)
-                    logger.info(f"create_hybrid_job: PDF has {page_count} pages")
-                    
-                    # Check max pages limit
-                    max_pages = options.get("max_pages", self.config.PDF_HYBRID_MAX_PAGES)
-                    if page_count > max_pages:
-                        raise PDFValidationError(
-                            f"PDF has {page_count} pages, which exceeds maximum of {max_pages} pages"
-                        )
+                old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(30)  # 30 second timeout
+                
+                try:
+                    with pdf_document_context(pdf_data=pdf_data) as doc:
+                        logger.info("create_hybrid_job: PDF document opened, counting pages")
+                        page_count = len(doc)
+                        logger.info(f"create_hybrid_job: PDF has {page_count} pages")
+                        
+                        # Check max pages limit
+                        max_pages = options.get("max_pages", self.config.PDF_HYBRID_MAX_PAGES)
+                        if page_count > max_pages:
+                            raise PDFValidationError(
+                                f"PDF has {page_count} pages, which exceeds maximum of {max_pages} pages"
+                            )
 
-                    if page_count == 0:
-                        raise PDFValidationError("PDF has no pages")
+                        if page_count == 0:
+                            raise PDFValidationError("PDF has no pages")
 
-                    if doc.is_encrypted:
-                        raise PDFValidationError("Encrypted PDFs are not supported")
+                        if doc.is_encrypted:
+                            raise PDFValidationError("Encrypted PDFs are not supported")
+                finally:
+                    # Cancel alarm and restore old handler
+                    signal.alarm(0)
+                    if old_handler is not None:
+                        signal.signal(signal.SIGALRM, old_handler)
+                        
+            except TimeoutError:
+                # Clean up signal handler
+                signal.alarm(0)
+                if old_handler is not None:
+                    signal.signal(signal.SIGALRM, old_handler)
+                logger.error("PDF parsing timed out after 30 seconds - file may be corrupted or too complex")
+                raise PDFValidationError("PDF parsing timed out. The file may be corrupted, too complex, or too large. Please try a different PDF.")
             except PDFValidationError:
+                # Clean up signal handler
+                signal.alarm(0)
+                if old_handler is not None:
+                    signal.signal(signal.SIGALRM, old_handler)
                 # Re-raise validation errors as-is
                 raise
             except Exception as e:
+                # Clean up signal handler
+                signal.alarm(0)
+                if old_handler is not None:
+                    signal.signal(signal.SIGALRM, old_handler)
                 # Catch any other exceptions during PDF parsing (corrupted files, etc.)
                 logger.error(f"PDF parsing failed: {str(e)} (type: {type(e).__name__})")
                 raise PDFValidationError(f"Failed to parse PDF file. The file may be corrupted or invalid: {str(e)}")
