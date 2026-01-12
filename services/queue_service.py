@@ -2,7 +2,6 @@
 Queue Management Service - Monitors and manages Celery queue
 """
 import logging
-import signal
 from typing import Dict, Any, Optional
 from celery import current_app as celery_app
 from config import get_config
@@ -29,34 +28,19 @@ class QueueService:
             Total number of tasks in queue (active + scheduled + reserved)
         """
         try:
-            import signal
+            # Use timeout parameter if available, otherwise just try quickly
+            inspect = self.celery_app.control.inspect(timeout=2.0)  # 2 second timeout
+            active = inspect.active() or {}
+            scheduled = inspect.scheduled() or {}
+            reserved = inspect.reserved() or {}
             
-            def timeout_handler(signum, frame):
-                raise TimeoutError("Queue size check timed out after 5 seconds")
-            
-            # Set 5 second timeout for Celery inspect
-            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(5)
-            
-            try:
-                inspect = self.celery_app.control.inspect()
-                active = inspect.active() or {}
-                scheduled = inspect.scheduled() or {}
-                reserved = inspect.reserved() or {}
-                
-                total = 0
-                for worker_tasks in [active, scheduled, reserved]:
-                    for tasks in worker_tasks.values():
-                        total += len(tasks)
-                return total
-            finally:
-                signal.alarm(0)
-                signal.signal(signal.SIGALRM, old_handler)
-        except TimeoutError:
-            logger.warning("Queue size check timed out, assuming queue is empty")
-            return 0
+            total = 0
+            for worker_tasks in [active, scheduled, reserved]:
+                for tasks in worker_tasks.values():
+                    total += len(tasks)
+            return total
         except Exception as e:
-            logger.error(f"Error getting queue size: {str(e)}")
+            logger.warning(f"Error getting queue size: {str(e)}, assuming queue is empty")
             return 0
     
     def get_active_jobs_count(self) -> int:
@@ -108,32 +92,16 @@ class QueueService:
         # Check Redis capacity if service available
         if self.resource_monitor:
             try:
-                import signal
+                estimated_redis_mb = estimated_pdf_size_mb * 0.07  # ~7% of PDF size for chunk results
+                redis_check = self.resource_monitor.check_redis_capacity(int(estimated_redis_mb * 1024 * 1024))
                 
-                def timeout_handler(signum, frame):
-                    raise TimeoutError("Redis capacity check timed out after 5 seconds")
-                
-                # Set 5 second timeout for Redis check
-                old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-                signal.alarm(5)
-                
-                try:
-                    estimated_redis_mb = estimated_pdf_size_mb * 0.07  # ~7% of PDF size for chunk results
-                    redis_check = self.resource_monitor.check_redis_capacity(int(estimated_redis_mb * 1024 * 1024))
-                    
-                    if not redis_check.get("has_capacity", True):
-                        return {
-                            "can_accept": False,
-                            "reason": "redis_full",
-                            "message": "Redis memory is full. Please try again later.",
-                            "redis_info": redis_check
-                        }
-                finally:
-                    signal.alarm(0)
-                    signal.signal(signal.SIGALRM, old_handler)
-            except TimeoutError:
-                logger.warning("Redis capacity check timed out, allowing job (fail open)")
-                # Fail open - allow job if Redis check times out
+                if not redis_check.get("has_capacity", True):
+                    return {
+                        "can_accept": False,
+                        "reason": "redis_full",
+                        "message": "Redis memory is full. Please try again later.",
+                        "redis_info": redis_check
+                    }
             except Exception as e:
                 logger.warning(f"Redis capacity check failed: {str(e)}, allowing job (fail open)")
                 # Fail open - allow job if Redis check fails

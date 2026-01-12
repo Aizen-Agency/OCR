@@ -156,35 +156,18 @@ class PDFHybridController(BaseController):
                 )
             print("process_hybrid_pdf: File size validated", file=sys.stderr, flush=True)
 
-            # Check system capacity before accepting job (with timeout to prevent hanging)
+            # Check system capacity before accepting job
+            # Note: Capacity checks have built-in timeouts and fail-open behavior
             print("process_hybrid_pdf: Checking system capacity", file=sys.stderr, flush=True)
             try:
-                import signal as sig_module
-                
-                def capacity_timeout_handler(signum, frame):
-                    raise TimeoutError("Capacity check timed out after 10 seconds")
-                
-                # Set 10 second timeout for entire capacity check
-                old_handler = sig_module.signal(sig_module.SIGALRM, capacity_timeout_handler)
-                sig_module.alarm(10)
-                
-                try:
-                    print("process_hybrid_pdf: Getting queue_service", file=sys.stderr, flush=True)
-                    queue_service = get_queue_service()
-                    print("process_hybrid_pdf: queue_service obtained", file=sys.stderr, flush=True)
-                    file_size_mb = len(file_data) / (1024 * 1024)  # Convert bytes to MB
-                    print(f"process_hybrid_pdf: File size: {file_size_mb:.2f} MB", file=sys.stderr, flush=True)
-                    print("process_hybrid_pdf: Calling can_accept_new_job (with 10s timeout)", file=sys.stderr, flush=True)
-                    capacity_check = queue_service.can_accept_new_job(estimated_pdf_size_mb=file_size_mb)
-                    print(f"process_hybrid_pdf: Capacity check result: {capacity_check.get('can_accept', False)}", file=sys.stderr, flush=True)
-                finally:
-                    sig_module.alarm(0)
-                    sig_module.signal(sig_module.SIGALRM, old_handler)
-                    
-            except TimeoutError:
-                print("process_hybrid_pdf: Capacity check timed out, allowing job (fail open)", file=sys.stderr, flush=True)
-                logger.warning("Capacity check timed out, allowing job (fail open)")
-                capacity_check = {"can_accept": True}  # Fail open - allow job
+                print("process_hybrid_pdf: Getting queue_service", file=sys.stderr, flush=True)
+                queue_service = get_queue_service()
+                print("process_hybrid_pdf: queue_service obtained", file=sys.stderr, flush=True)
+                file_size_mb = len(file_data) / (1024 * 1024)  # Convert bytes to MB
+                print(f"process_hybrid_pdf: File size: {file_size_mb:.2f} MB", file=sys.stderr, flush=True)
+                print("process_hybrid_pdf: Calling can_accept_new_job", file=sys.stderr, flush=True)
+                capacity_check = queue_service.can_accept_new_job(estimated_pdf_size_mb=file_size_mb)
+                print(f"process_hybrid_pdf: Capacity check result: {capacity_check.get('can_accept', False)}", file=sys.stderr, flush=True)
                 
                 if not capacity_check.get("can_accept", True):
                     reason = capacity_check.get("reason", "capacity_exceeded")
