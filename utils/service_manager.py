@@ -78,28 +78,42 @@ class ServiceManager:
         Returns:
             RedisService instance (may be None if connection fails)
         """
+        import sys
+        print("ServiceManager.get_redis_service: Starting", file=sys.stderr, flush=True)
         if self._redis_service is None or not self._redis_initialized:
+            print("ServiceManager.get_redis_service: Redis service not initialized, creating", file=sys.stderr, flush=True)
             with self._lock:
                 if self._redis_service is None or not self._redis_initialized:
                     try:
+                        print("ServiceManager.get_redis_service: Importing RedisService", file=sys.stderr, flush=True)
                         from services.redis_service import RedisService
+                        print("ServiceManager.get_redis_service: Creating RedisService instance (THIS MAY HANG ON REDIS CONNECTION)", file=sys.stderr, flush=True)
                         self._redis_service = RedisService()
+                        print("ServiceManager.get_redis_service: RedisService created, checking connection", file=sys.stderr, flush=True)
                         if self._redis_service.is_connected():
+                            print("ServiceManager.get_redis_service: Redis is connected", file=sys.stderr, flush=True)
                             logger.info("Redis service initialized via ServiceManager")
                         else:
+                            print("ServiceManager.get_redis_service: Redis is NOT connected", file=sys.stderr, flush=True)
                             logger.warning("Redis service initialized but not connected")
                         self._redis_initialized = True
                     except Exception as e:
+                        print(f"ServiceManager.get_redis_service: Failed to initialize: {str(e)}", file=sys.stderr, flush=True)
                         logger.warning(f"Failed to initialize Redis service: {str(e)}. Will work without caching.")
                         self._redis_service = None
                         self._redis_initialized = True  # Mark as initialized to avoid retry loops
+        else:
+            print("ServiceManager.get_redis_service: Returning existing redis service", file=sys.stderr, flush=True)
         
         # Verify connection is still active
         if self._redis_service and not self._redis_service.is_connected():
+            print("ServiceManager.get_redis_service: Redis connection lost, attempting to reconnect (THIS MAY HANG)", file=sys.stderr, flush=True)
             logger.warning("Redis connection lost, attempting to reconnect...")
             try:
                 self._redis_service._connect()
+                print("ServiceManager.get_redis_service: Redis reconnected", file=sys.stderr, flush=True)
             except Exception as e:
+                print(f"ServiceManager.get_redis_service: Redis reconnection failed: {str(e)}", file=sys.stderr, flush=True)
                 logger.warning(f"Redis reconnection failed: {str(e)}")
         
         return self._redis_service
@@ -131,21 +145,32 @@ class ServiceManager:
         Returns:
             ResourceMonitor instance
         """
+        import sys
+        print("ServiceManager.get_resource_monitor: Starting", file=sys.stderr, flush=True)
         if self._resource_monitor is None or not self._resource_monitor_initialized:
+            print("ServiceManager.get_resource_monitor: ResourceMonitor not initialized, creating", file=sys.stderr, flush=True)
             with self._lock:
                 if self._resource_monitor is None or not self._resource_monitor_initialized:
                     try:
+                        print("ServiceManager.get_resource_monitor: Importing ResourceMonitor", file=sys.stderr, flush=True)
                         from services.resource_monitor import ResourceMonitor
+                        print("ServiceManager.get_resource_monitor: Getting redis_service (THIS MAY HANG)", file=sys.stderr, flush=True)
                         redis_service = self.get_redis_service()
+                        print("ServiceManager.get_resource_monitor: redis_service obtained", file=sys.stderr, flush=True)
+                        print("ServiceManager.get_resource_monitor: Creating ResourceMonitor instance", file=sys.stderr, flush=True)
                         self._resource_monitor = ResourceMonitor(redis_service=redis_service)
                         self._resource_monitor_initialized = True
+                        print("ServiceManager.get_resource_monitor: ResourceMonitor initialized", file=sys.stderr, flush=True)
                         logger.info("ResourceMonitor initialized via ServiceManager")
                     except Exception as e:
+                        print(f"ServiceManager.get_resource_monitor: Failed to initialize: {str(e)}", file=sys.stderr, flush=True)
                         logger.warning(f"Failed to initialize ResourceMonitor: {str(e)}")
                         # Create without Redis if Redis unavailable
                         from services.resource_monitor import ResourceMonitor
                         self._resource_monitor = ResourceMonitor(redis_service=None)
                         self._resource_monitor_initialized = True
+        else:
+            print("ServiceManager.get_resource_monitor: Returning existing resource monitor", file=sys.stderr, flush=True)
         return self._resource_monitor
     
     def get_queue_service(self):
@@ -155,25 +180,38 @@ class ServiceManager:
         Returns:
             QueueService instance
         """
+        import sys
+        print("ServiceManager.get_queue_service: Starting", file=sys.stderr, flush=True)
         if self._queue_service is None or not self._queue_service_initialized:
+            print("ServiceManager.get_queue_service: Queue service not initialized, creating", file=sys.stderr, flush=True)
             with self._lock:
                 if self._queue_service is None or not self._queue_service_initialized:
                     try:
+                        print("ServiceManager.get_queue_service: Importing QueueService", file=sys.stderr, flush=True)
                         from services.queue_service import QueueService
+                        print("ServiceManager.get_queue_service: Getting redis_service (THIS MAY HANG)", file=sys.stderr, flush=True)
                         redis_service = self.get_redis_service()
+                        print("ServiceManager.get_queue_service: redis_service obtained", file=sys.stderr, flush=True)
+                        print("ServiceManager.get_queue_service: Getting resource_monitor (THIS MAY HANG)", file=sys.stderr, flush=True)
                         resource_monitor = self.get_resource_monitor()
+                        print("ServiceManager.get_queue_service: resource_monitor obtained", file=sys.stderr, flush=True)
+                        print("ServiceManager.get_queue_service: Creating QueueService instance", file=sys.stderr, flush=True)
                         self._queue_service = QueueService(
                             redis_service=redis_service,
                             resource_monitor=resource_monitor
                         )
                         self._queue_service_initialized = True
+                        print("ServiceManager.get_queue_service: QueueService initialized", file=sys.stderr, flush=True)
                         logger.info("QueueService initialized via ServiceManager")
                     except Exception as e:
+                        print(f"ServiceManager.get_queue_service: Failed to initialize: {str(e)}", file=sys.stderr, flush=True)
                         logger.warning(f"Failed to initialize QueueService: {str(e)}")
                         # Create without dependencies if unavailable
                         from services.queue_service import QueueService
                         self._queue_service = QueueService(redis_service=None, resource_monitor=None)
                         self._queue_service_initialized = True
+        else:
+            print("ServiceManager.get_queue_service: Returning existing queue service", file=sys.stderr, flush=True)
         return self._queue_service
     
     def reset_ocr_service(self):
