@@ -29,9 +29,6 @@ from utils.resource_manager import cleanup_memory
 
 logger = logging.getLogger(__name__)
 
-# Get config instance for time limits (same pattern as pdf_hybrid_tasks.py)
-config = get_config()
-
 
 @signals.worker_ready.connect
 def preload_ocr_service(sender, **kwargs):
@@ -198,13 +195,7 @@ def process_image_task(self, image_data_b64: str, filename: str = "") -> Dict[st
         ocr_svc.cleanup_memory()
 
 
-@celery_app.task(
-    bind=True, 
-    base=OCRTask, 
-    name='tasks.process_pdf_task',
-    time_limit=config.CELERY_PDF_CHUNK_TIME_LIMIT,  # 30 minutes for full PDF
-    soft_time_limit=config.CELERY_PDF_CHUNK_SOFT_TIME_LIMIT  # 27 minutes
-)
+@celery_app.task(bind=True, base=OCRTask, name='tasks.process_pdf_task')
 def process_pdf_task(self, pdf_data_b64: str, filename: str = "", dpi: int = 300) -> Dict[str, Any]:
     """
     Process a PDF file for OCR asynchronously.
