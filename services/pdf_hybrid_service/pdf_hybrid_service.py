@@ -121,21 +121,30 @@ class PDFHybridService:
                 raise PDFValidationError(size_error or "Invalid PDF file size")
             
             # Validate PDF using context manager for automatic cleanup
-            with pdf_document_context(pdf_data=pdf_data) as doc:
-                page_count = len(doc)
-                
-                # Check max pages limit
-                max_pages = options.get("max_pages", self.config.PDF_HYBRID_MAX_PAGES)
-                if page_count > max_pages:
-                    raise PDFValidationError(
-                        f"PDF has {page_count} pages, which exceeds maximum of {max_pages} pages"
-                    )
+            # Wrap in try-except to catch any parsing errors that could cause hangs
+            try:
+                with pdf_document_context(pdf_data=pdf_data) as doc:
+                    page_count = len(doc)
+                    
+                    # Check max pages limit
+                    max_pages = options.get("max_pages", self.config.PDF_HYBRID_MAX_PAGES)
+                    if page_count > max_pages:
+                        raise PDFValidationError(
+                            f"PDF has {page_count} pages, which exceeds maximum of {max_pages} pages"
+                        )
 
-                if page_count == 0:
-                    raise PDFValidationError("PDF has no pages")
+                    if page_count == 0:
+                        raise PDFValidationError("PDF has no pages")
 
-                if doc.is_encrypted:
-                    raise PDFValidationError("Encrypted PDFs are not supported")
+                    if doc.is_encrypted:
+                        raise PDFValidationError("Encrypted PDFs are not supported")
+            except PDFValidationError:
+                # Re-raise validation errors as-is
+                raise
+            except Exception as e:
+                # Catch any other exceptions during PDF parsing (corrupted files, etc.)
+                logger.error(f"PDF parsing failed: {str(e)} (type: {type(e).__name__})")
+                raise PDFValidationError(f"Failed to parse PDF file. The file may be corrupted or invalid: {str(e)}")
 
             # Get processing options
             dpi = options.get("dpi", self.config.PDF_HYBRID_DEFAULT_DPI)
